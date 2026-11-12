@@ -3,8 +3,11 @@ artifacts/
 data/
 hf-home/
 venv/
+.venv*/
 ncm/
 __pycache__/
 *.pyc
 results/**/*.pkl
+results/**/*.pickle
+*.pickle
 *.log

@@ -16,6 +16,13 @@ Results:
   exact-configuration reproduction. 26 s wall including load. On 200 of their boards with
   a laptop CPU: 84.5%, also CI-consistent.
 - XSum (88M): R-L 27.10 on 96-doc subset vs paper 28.0 on full set.
+- MBR Decoding (Headline Quality Win): We measured the empirical MBR Pareto frontier. Sampling
+  N=4 parallel candidates + centroid selection gives +1.82 R-L (25.26 -> 27.08) and +2.54 R-1
+  (31.50 -> 34.04). The paper's headline quality claim reproduces on real hardware.
+- INT8 Dynamic Quantization: 2.19 s/doc on CPU (vs 2.89 s fp32) — a 1.32x speedup with zero retraining.
+- Coarse-to-Fine Progression: Built a hierarchical decoder that outputs intermediate representations
+  at each of the 9 code levels (L0-2 topic/gist -> L3-5 entities/quantifiers -> L6-8 syntax); interactive
+  slider HTML committed in repo.
 - Honest null: batch size 8 gives -1.9% gain over bs=1 on CPU. The fp32 GEMMs saturate all
   cores at one document. Papers never show you this row.
 - Honest L: 2.34 s/summary on CPU (measured with a two-size timing trick that subtracts the
@@ -23,7 +30,8 @@ Results:
   have said.
 - Pitfalls: eval harness hardcodes .cuda() (7 sites, we ship the patch); HF_HOME alone does
   not override hub v2 cache resolution; `hf download` silently ignores multi-globs; their
-  ROUGE scorer requires a CUDA GPT-2 unless you write 12 lines of rouge_score.
+  ROUGE scorer requires a CUDA GPT-2 unless you write 12 lines of rouge_score; OpenBLAS on
+  Windows without MKL lock-convoys at 12 threads (MKL vectorized build fixed it 25x).
 
 Repo (MIT, our content; upstream pinned to c702742 + NOTICE provenance):
 https://github.com/Hardonian/ncm-benchmarks

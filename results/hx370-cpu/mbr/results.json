@@ -1,0 +1,41 @@
+{
+  "mbr_N1": {
+    "n_candidates": 1,
+    "rouge1": 31.5,
+    "rouge2": 8.39,
+    "rougeL": 25.26,
+    "avg_latency_s": 2.26,
+    "total_time_s": 18.08,
+    "samples": [
+      "The number of beds made available for homeless people living in accommodation in Wales has risen in last year, a Welsh housing homelessness charity has said.",
+      "A man has been arrested in connection with a number of firearms ammunition and ammunition were seized in Edinburgh.",
+      "Four people have been charged with, kidnapping, beating, beat and beat a white black man in Chicago."
+    ]
+  },
+  "mbr_N4": {
+    "n_candidates": 4,
+    "rouge1": 34.04,
+    "rouge2": 10.59,
+    "rougeL": 27.08,
+    "avg_latency_s": 9.55,
+    "total_time_s": 76.43,
+    "samples": [
+      "The number of new homes built in Wales has increased by five-fold increase of affordable housing in the last year, a charity has said.",
+      "A man has been arrested after a suspected firearm ammunition and ammunition were seized in Edinburgh.",
+      "Four people have been arrested in the US accused of beating beating and beat a disabled black man."
+    ]
+  },
+  "mbr_N8": {
+    "n_candidates": 8,
+    "rouge1": 31.75,
+    "rouge2": 7.75,
+    "rougeL": 25.0,
+    "avg_latency_s": 19.71,
+    "total_time_s": 157.71,
+    "samples": [
+      "The number of homeless people offered accommodation in Wales has risen by almost 72% in Wales last year, a charity has said.",
+      "A man has been arrested in connection with a number of firearms and ammunition seized in Edinburgh.",
+      "Four people have been charged with kidnapping, abducting and beat beat of a disabled black man in Chicago."
+    ]
+  }
+}

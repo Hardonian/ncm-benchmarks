@@ -80,3 +80,4 @@ def test_progressive_endpoint():
     data = res.json()
     assert data["num_levels"] == 2
     assert len(data["levels"]) == 2
+
