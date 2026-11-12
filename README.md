@@ -112,6 +112,63 @@ the verified run, zero edits).
 - Local subsets carry their n and, for the binary metric, a 95% CI. We do not blend
   our numbers with the paper's in any single cell.
 
+## Unified CLI (`ncm-bench`)
+
+The repo provides a full command-line suite:
+
+```bash
+# Verify all model and dataset SHA256 checksums
+python -m ncm_bench.cli verify
+
+# Summarize text directly from terminal or piped input
+echo "The UK government announced renewable energy expansion..." | python -m ncm_bench.cli summarize --quantize int8
+
+# Run MBR consensus decoding (N=4 candidates, +1.82 R-L boost)
+python -m ncm_bench.cli mbr --text "<document...>" --candidates 4
+
+# Inspect the 9-level concept hierarchy and generate an HTML visualizer
+python -m ncm_bench.cli inspect --text "<document...>" --html visualizer.html
+
+# Launch local REST service with dynamic INT8 acceleration
+python -m ncm_bench.cli serve --port 8031 --quantize int8
+```
+
+## Turnkey Deployment & SDK
+
+### One-Click Local Runners
+- **Windows**: double-click or run `run_service.bat`
+- **Linux / macOS**: run `./run_service.sh`
+- **Docker Compose**: `docker compose up -d` (packaged in [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml))
+
+### Python Client SDK (`service/client.py`)
+```python
+from service.client import NCMClient
+
+client = NCMClient(base_url="http://127.0.0.1:8031")
+
+# Fast single-shot summary
+res = client.summarize("Long document text...")
+print(res["summary"], f"({res['latency_ms']} ms)")
+
+# High-fidelity consensus summary via MBR
+mbr_res = client.mbr_summarize("Long document text...", num_candidates=4)
+print(mbr_res["summary"])
+
+# Inspect intermediate concept hierarchy
+levels = client.progressive_summarize("Long document text...")
+```
+
+### Enterprise Document Triage Batch Processor
+Process thousands of records with automated latency tracking:
+```bash
+python scripts/batch_triage.py --input documents.jsonl --output triage_results.jsonl --mode standard
+```
+
+## Enterprise & Commercial Research Whitepaper
+
+For unit economics, TCO models (Cloud API vs. Local Appliance at 100K–100M doc scale), and air-gapped compliance architectures, read the full whitepaper:
+- [Enterprise Whitepaper: Sovereign Document Intelligence via Next-Concept Modeling](docs/ENTERPRISE-WHITEPAPER.md)
+
 ## Local summarizer service (expansion)
 
 `service/summarize_server.py` wraps the vendored pipeline in a production-grade FastAPI server. Fully local, 654 MB of weights, zero network calls at inference time:

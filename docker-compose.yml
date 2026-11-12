@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  ncm-sovereign-summarizer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hardonian/ncm-sovereign-summarizer:2.0.0
+    container_name: ncm-summarizer
+    restart: unless-stopped
+    ports:
+      - "8031:8031"
+    environment:
+      - NCM_DEVICE=cpu
+      - OMP_NUM_THREADS=8
+      - QUANTIZE=int8
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+      - ./hf-home:/app/hf-home:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8031/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
