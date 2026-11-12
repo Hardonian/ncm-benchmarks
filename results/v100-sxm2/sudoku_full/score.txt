@@ -1,0 +1,5 @@
+
+merged 1 shards -> 2000 sudoku-hard outputs
+
+ solved %  solved  cell %  valid %
+    86.30 1726/2000   98.35    86.30

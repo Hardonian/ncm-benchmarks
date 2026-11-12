@@ -10,7 +10,10 @@ parallel forward pass per level, K=8-32 total) instead of one-token-at-a-time or
 64-128 denoising steps.
 
 This repo answers the only question that matters if you plan to *run* this stuff:
-**do the numbers survive contact with non-H100 hardware?**
+**do the numbers survive contact with non-H100 hardware?** Short answer: quality
+does (Sudoku full-test 86.30% vs paper 86.1%, on a V100; XSum within 0.4 pt on
+1000 docs); absolute latency does not travel — it's 2.3 s/doc on a laptop CPU and
+0.113 s/doc on the V100, both measured, both in `results/`.
 
 ## Results (measured here, not quoted from the paper)
 
@@ -20,9 +23,17 @@ This repo answers the only question that matters if you plan to *run* this stuff
 | XSum summarization (88M gen, 9 levels) | R-L 28.0 / 11,334 docs (H100, 31x less wall-clock than diffusion) | **R-L 27.10** (R-1 33.46, R-2 12.33) / first 96 docs / **CPU fp32** | Consistent at ~1 pt |
 | CPU summary latency | -- | **2.34 s/doc** marginal (bs=1), ~5.7 s cold load, 25 docs/min sustained | "Sub-second local" does NOT hold on a laptop CPU; 2.3 s does |
 | Batching on CPU | -- | bs=8 saves **-1.9%** vs bs=1 (i.e. nothing) | Null result, reported honestly: fp32 GEMMs already saturate 16 cores at bs=1 |
+| **Sudoku hard — FULL 2000 boards (V100)** | 86.1% solved / full test | **86.30%** (1726/2000), cell 98.35%, 26.0 s wall incl. load, bs=128 | **Exact-configuration reproduction: +0.2 pp** |
+| XSum 1000 docs (V100, bs=32) | 35.0 / 12.8 / 28.0 full test | **34.63 / 12.84 / 27.78** | Consistent within 0.4 pt on 8.8% subset |
+| GPU summary latency | -- | **0.113 s/doc** sequential (bs=1), **0.096 s/doc** marginal (bs=32) ≈ 10.4 docs/s | 21x faster than this box's CPU; floor, see caveat |
 
-Full machine-readable summary: [results/hx370-cpu/results.json](results/hx370-cpu/results.json).
-Raw per-run logs next to it. GPU (V100 lane) rows pending -- see README notes below.
+Full machine-readable summaries: [results/hx370-cpu/results.json](results/hx370-cpu/results.json) and [results/v100-sxm2/results.json](results/v100-sxm2/results.json).
+Raw per-run logs in `results/<machine>/`.
+
+**V100 caveat (honesty first):** the V100-SXM2-16GB lane was shared with another tenant
+(~11 GB resident). The bs=32 runs logged CUDACachingAllocator OOM-retry warnings, then
+completed with correct outputs — times include allocator churn and are **conservative
+lower bounds** on a dedicated GPU. The bs=1 numbers (0.113 s/doc) ran before the pressure.
 
 **Hardware for the CPU numbers:** Ryzen AI 9 HX 370, 16 cores visible under WSL2,
 19 GiB RAM, no GPU used, torch 2.15.0+cpu, transformers 5.22.2 (upstream pins
@@ -42,7 +53,8 @@ LM1B, XSum, WMT14 and Sudoku while using 4-5x fewer training tokens.
 
 1. **The efficiency is real and survives hardware translation.** A 654 MB
    (tokenizer+generator) MIT-licensed XSum model produces 25 summaries/minute on a
-   laptop CPU with no cloud call. The speed advantage comes from the architecture
+   laptop CPU and ~620/min on a 2018-era V100 (0.113 s/doc sequential — still 21x
+   the CPU), with no cloud call. The speed advantage comes from the architecture
    (9 passes over <=560-token sequences), not from the H100 in their figure.
 2. **The paper's headline quality win is MBR decoding** -- cheap parallel candidates
    + a selector (28.0 -> 29.6 R-L at matched time). If your orchestration already
@@ -87,12 +99,14 @@ the verified run, zero edits).
 
 ## What is verified vs claimed
 
-- **Verified here, this week:** every number in `results/hx370-cpu/`, on this
-  machine, with their scorer (`scripts/eval_merge.py exact()` for Sudoku) or an
-  equivalent CPU scorer for ROUGE.
+- **Verified here, this week:** every number in `results/hx370-cpu/` (laptop CPU) and
+  `results/v100-sxm2/` (EPYC V100 lane), on our machines, with their scorer
+  (`scripts/eval_merge.py exact()` for Sudoku) or an equivalent CPU scorer for ROUGE.
+  The V100 Sudoku run is the **full official 2000-board test** — an exact-configuration
+  reproduction (86.30% vs paper 86.1%), not a subset extrapolation.
 - **Quoted from the paper** (we did not reproduce them): H100 wall-clock speedups
-  (21x/31x), LM1B/OWT perplexity sweeps, WMT14 BLEU, MBR deltas, training budgets.
-- **Pending:** V100 GPU lane row (runner staged in `scripts/as-run/epyc_runbook.sh`).
+  (21x/31x vs diffusion baselines — our CPU/V100 runs measure the NCM model only),
+  LM1B/OWT perplexity sweeps, WMT14 BLEU, MBR deltas, training budgets.
 - Local subsets carry their n and, for the binary metric, a 95% CI. We do not blend
   our numbers with the paper's in any single cell.
 

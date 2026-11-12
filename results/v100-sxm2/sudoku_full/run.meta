@@ -1,0 +1,5 @@
+sudoku_full n=2000 bs=128 start=2026-11-12T01:13:50Z
+
+real	0m26.026s
+user	0m24.362s
+sys	0m9.996s
