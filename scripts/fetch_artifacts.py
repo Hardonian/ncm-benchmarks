@@ -17,8 +17,8 @@ os.environ.setdefault("HF_HUB_CACHE", str(HF_HOME / "hub"))
 os.environ.setdefault("TRANSFORMERS_CACHE", str(HF_HOME / "hub"))
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
-from huggingface_hub import hf_hub_download
-from transformers import AutoTokenizer
+from huggingface_hub import hf_hub_download  # noqa: E402
+from transformers import AutoTokenizer  # noqa: E402
 
 CKPT_REPO = "hazyresearch/ncm-checkpoints"
 DATA_REPO = "hazyresearch/ncm-datasets"

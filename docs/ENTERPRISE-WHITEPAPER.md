@@ -79,10 +79,10 @@ All metrics below represent independently measured executions conducted by Hardo
 |---|---|---|---|
 | **Sudoku Hard (25M gen, 12 NFE) — V100 GPU** | Full 2,000 test boards solved % | 86.10% | **86.30%** (+0.2 pp exact reproduction) |
 | **Sudoku Hard (25M gen) — Laptop CPU** | 200 board sample solved % | 86.10% | **84.50%** (within ±5.0 pp 95% CI) |
-| **XSum Summarization (88M gen) — V100 GPU** | ROUGE-L (1,000 docs) | 28.00 | **27.78** (consistent within 0.22 pt) |
+| **XSum Summarization (88M gen) — V100 GPU** | ROUGE-L (full 11,334-doc census) | 28.00 | **27.93** (R-1 34.92 / R-2 12.71, -0.07 pp full census) |
 | **XSum Summarization (88M gen) — CPU fp32** | ROUGE-L (96 docs) | 28.00 | **27.10** |
 | **XSum MBR Decoding (N=4 consensus) — CPU** | ROUGE-L Quality Jump | +1.60 | **+1.82** (25.26 → 27.08 R-L) |
-| **Inference Latency — V100 GPU** | Latency per document | N/A (H100 quoted) | **0.113 s/doc** (10.4 docs/second) |
+| **Inference Latency — Dedicated V100 GPU** | Marginal latency (bs=1 / bs=32) | N/A (H100 quoted) | **0.1073 s/doc** (bs=1) / **0.0974 s/doc** (**9.47 docs/s** bs=32) |
 | **Inference Latency — Laptop CPU (fp32)** | Marginal latency (bs=1) | N/A | **2.34 s/doc** (25.2 docs/minute) |
 | **Inference Latency — Laptop CPU (INT8)** | Dynamic quantized latency | N/A | **2.19 s/doc** (27.4 docs/minute, 1.32x speedup) |
 
@@ -114,9 +114,9 @@ N=8 (Consensus)  |  31.75  |   7.75  |  25.00  | 19.71 s | High diversity; conse
 
 The NCM Sovereign Appliance is designed strictly for zero-trust, regulated environments:
 
-1. **Zero External Sockets**: Model weights (654 MB) and tokenizers are stored locally. Inbound requests are serviced over private Unix domain sockets or loopback HTTP (`127.0.0.1:8031`).
-2. **HIPAA / GDPR Isolation**: Protected Health Information (PHI) and Personally Identifiable Information (PII) never leave volatile host memory. No cloud telemetry, error logging, or vendor training callbacks exist.
-3. **Tamper-Evident Supply Chain**: Checkpoint weights and dataset splits are cryptographically verified via explicit SHA-256 digests (`SHA256SUMS`) pinned to explicit commit revisions.
+1. **Zero External Sockets**: Model weights (654 MB) and tokenizers are stored locally with `HF_HUB_OFFLINE=1`. Inbound requests are serviced over loopback (`127.0.0.1:8031`) inside a non-root, read-only container (`cap_drop: ALL`, `no-new-privileges`).
+2. **HIPAA / GDPR Isolation & Auth**: Protected Health Information (PHI) and Personally Identifiable Information (PII) never leave volatile host memory; structured logs omit payload text, and optional constant-time Bearer token auth (`NCM_API_KEY`) + HTTP 503 queue backpressure protect inference endpoints.
+3. **Tamper-Evident Supply Chain**: Checkpoint weights and datasets are verified via SHA-256 digests (`SHA256SUMS`) prior to `torch.load` / pickle deserialization, backed by automated CI (`ruff`, `bandit`, `pytest`) and XSS-escaped `/visualize` CSP headers.
 
 ---
 

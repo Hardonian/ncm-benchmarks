@@ -1,6 +1,6 @@
 # I ran Stanford's "Next-Concept Modeling" paper on a laptop CPU. Here's what survived.
 
-Draft for storefront blog (/blog/ncm-on-home-hardware) — fill V100 row when EPYC leg runs.
+Draft for storefront blog (/blog/ncm-on-home-hardware) — updated with dedicated V100 + full 11,334-doc XSum census.
 Target: 900-1200 words, technical, honest. SEO title alt: "NCM benchmark: local-first text generation measured on CPU and V100".
 
 ---
@@ -68,13 +68,10 @@ all cores at a single document; the speed comes from the architecture (9 passes,
 sequences), not from squeezing more in parallel. If your capacity plan assumed batch
 amortization on CPU, this kills that assumption — with receipts.
 
-V100 lane (our EPYC box, same patched code, same fp32): Sudoku **full 2000-board
-test: 86.30% solved vs paper's 86.1% — exact-configuration reproduction, +0.2 pp.**
-XSum 1000 docs bs=32: R-L 27.78 (paper 28.0 full set). Sequential latency 0.113 s/doc,
-throughput 10.4 docs/s. That's 21x the laptop CPU on the same 654 MB artifact — and a
-2018 GPU at that. One honest asterisk: our V100 had a co-tenant using ~11 GB during
-the bs=32 runs; allocator OOM-retries inflated wall times, so those are conservative
-floors, not ceilings.
+V100 lane (our EPYC box, clean dedicated GPU with 0 co-tenant warnings, same patched code, fp32):
+- Sudoku **full 2000-board test: 86.30% solved** (1726/2000, cell 98.35%, 26.0 s wall) vs paper's 86.1% — **exact-configuration reproduction, +0.2 pp.**
+- **XSum full 11,334-doc census (bs=32): 34.92 / 12.71 / 27.93** (ROUGE-1/2/L) in 1,241 s (9.13 docs/s) vs paper's 35.0 / 12.8 / 28.0 — within **0.07–0.09 pp across the entire test corpus.**
+- Sequential latency: **0.1073 s/doc** (bs=1) and **0.0974 s/doc** marginal at bs=32 (**9.47 docs/s**). That's 22x the laptop CPU on the same 654 MB artifact — on a 2018 GPU.
 
 ## Why I care (the financial, enterprise, and local-first angle)
 
@@ -107,13 +104,13 @@ on a laptop CPU, with zero network calls, is a fundamentally different economic 
 
 ## Honest status
 
-Three core claims reproduce:
-1. Sudoku hard accuracy: 84.50% (CPU) and 86.30% (V100 exact-reproduction vs paper's 86.1%).
-2. XSum ROUGE quality: 27.10 (CPU) and 27.78 (V100 vs paper's 28.0).
+Three core claims reproduce end-to-end:
+1. Sudoku hard accuracy (full 2,000 boards): 84.50% (CPU n=200) and **86.30%** (dedicated V100 exact-reproduction vs paper's 86.1%).
+2. XSum ROUGE quality (full 11,334 docs on V100): **34.92 / 12.71 / 27.93** vs paper's 35.0 / 12.8 / 28.0 (-0.07 pp R-L across all 11,334 documents).
 3. Headline MBR decoding boost: +1.82 R-L jump on home CPU (paper reported +1.6).
 
 The latency reality: "sub-second CPU" does not hold on laptop CPUs (2.34s fp32, 2.19s INT8 does),
-while a 2018-era V100 crushes it at 0.113s/doc (10.4 docs/s). Everything above is fully reproducible
+while a dedicated 2018-era V100 crushes it at 0.1073s/doc sequential (9.47 docs/s batched). Everything above is fully reproducible
 via `results.json`: clone, patch, fetch, run. No cherry-picking — the null result is in the abstract.
 
 Links: paper https://arxiv.org/abs/2610.14162 | code https://github.com/HazyResearch/ncm |

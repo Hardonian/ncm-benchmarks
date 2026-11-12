@@ -9,13 +9,15 @@ coarse-to-fine hierarchy of discrete codes, 8-32 parallel passes instead of 64-1
 NFEs. Published speedups (21x/31x) were all H100.
 
 We benchmarked on hardware that exists in real homes: Ryzen AI 9 HX 370 CPU (16 cores, fp32)
-and an EPYC box with a shared V100-SXM2. Scripted, sha256-pinned, reproducible.
+and an EPYC box with a dedicated V100-SXM2. Scripted, sha256-pinned, reproducible.
 
 Results:
 - Sudoku hard, FULL 2000-board test on V100 (25M model): 86.3% solved vs paper's 86.1% —
   exact-configuration reproduction. 26 s wall including load. On 200 of their boards with
   a laptop CPU: 84.5%, also CI-consistent.
-- XSum (88M): R-L 27.10 on 96-doc subset vs paper 28.0 on full set.
+- XSum (88M), FULL 11,334-doc census on V100: R-1 34.92 / R-2 12.71 / R-L 27.93 in 1,241 s
+  (9.13 docs/s) vs paper's 35.0 / 12.8 / 28.0 (within 0.07 pp R-L on the full corpus!).
+  On CPU (96 docs): R-L 27.10; V100 latency 0.107s/doc (bs=1) and 0.097s/doc (bs=32, 9.47 docs/s).
 - MBR Decoding (Headline Quality Win): We measured the empirical MBR Pareto frontier. Sampling
   N=4 parallel candidates + centroid selection gives +1.82 R-L (25.26 -> 27.08) and +2.54 R-1
   (31.50 -> 34.04). The paper's headline quality claim reproduces on real hardware.

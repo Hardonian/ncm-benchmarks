@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim-bookworm
 
-# System dependencies for MKL and OpenMP
+# System dependencies + non-root runtime user
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     curl \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 10001 ncmgroup \
+    && useradd -u 10001 -g ncmgroup -s /usr/sbin/nologin -m ncmuser
 
 WORKDIR /app
 
-# Pin cache environment variables for offline enforcement
+# Pin cache environment variables for strict offline enforcement
 ENV NCM_HOME=/app \
     NCM_ROOT=/app/ncm \
     NCM_DEVICE=cpu \
@@ -29,18 +29,22 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 COPY requirements.txt pyproject.toml /app/
 RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir requests
 
-# Copy application source, models, and vendored code
+# Copy application source, SHA256SUMS, and vendored upstream code
+COPY SHA256SUMS /app/SHA256SUMS
 COPY ncm_bench/ /app/ncm_bench/
 COPY service/ /app/service/
 COPY ncm/ /app/ncm/
 COPY artifacts/ /app/artifacts/
 COPY hf-home/ /app/hf-home/
 
+RUN chown -R ncmuser:ncmgroup /app
+
+USER ncmuser
+
 EXPOSE 8031
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:8031/health || exit 1
+  CMD curl -fsS http://127.0.0.1:8031/health || exit 1
 
 ENTRYPOINT ["python", "service/summarize_server.py"]
 CMD ["--host", "0.0.0.0", "--port", "8031", "--quantize", "int8"]
-

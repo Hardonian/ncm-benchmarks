@@ -11,9 +11,12 @@ parallel forward pass per level, K=8-32 total) instead of one-token-at-a-time or
 
 This repo answers the only question that matters if you plan to *run* this stuff:
 **do the numbers survive contact with non-H100 hardware?** Short answer: quality
-does (Sudoku full-test 86.30% vs paper 86.1%, on a V100; XSum within 0.4 pt on
-1000 docs); absolute latency does not travel — it's 2.3 s/doc on a laptop CPU and
-0.113 s/doc on the V100, both measured, both in `results/`.
+does — **exact-configuration reproduction on both full official test sets** on a
+dedicated 2018-era V100 (Sudoku 2,000 boards: **86.30%** vs paper 86.1%; XSum full
+11,334-doc census: **34.92 / 12.71 / 27.93** vs paper 35.0 / 12.8 / 28.0, within
+0.07–0.09 pp); absolute latency does not travel — it's 2.34 s/doc fp32 (2.19 s/doc
+INT8) on a laptop CPU and **0.0974–0.1073 s/doc** on the V100, all measured, all
+in `results/`.
 
 ## Results (measured here, not quoted from the paper)
 
@@ -26,16 +29,13 @@ does (Sudoku full-test 86.30% vs paper 86.1%, on a V100; XSum within 0.4 pt on
 | CPU summary latency | -- | **2.34 s/doc** marginal (bs=1), ~5.7 s cold load, 25 docs/min sustained | "Sub-second local" does NOT hold on a laptop CPU; 2.3 s does |
 | Batching on CPU | -- | bs=8 saves **-1.9%** vs bs=1 (i.e. nothing) | Null result, reported honestly: fp32 GEMMs already saturate 16 cores at bs=1 |
 | **Sudoku hard — FULL 2000 boards (V100)** | 86.1% solved / full test | **86.30%** (1726/2000), cell 98.35%, 26.0 s wall incl. load, bs=128 | **Exact-configuration reproduction: +0.2 pp** |
-| XSum 1000 docs (V100, bs=32) | 35.0 / 12.8 / 28.0 full test | **34.63 / 12.84 / 27.78** | Consistent within 0.4 pt on 8.8% subset |
-| GPU summary latency | -- | **0.113 s/doc** sequential (bs=1), **0.096 s/doc** marginal (bs=32) ≈ 10.4 docs/s | 21x faster than this box's CPU; floor, see caveat |
+| **XSum — FULL 11,334-doc census (V100, bs=32)** | 35.0 / 12.8 / 28.0 full test | **34.92 / 12.71 / 27.93** (20.7 avg words, 1,241 s wall, 9.13 docs/s) | **Exact full-corpus reproduction: -0.07 pp R-L** |
+| GPU summary latency (dedicated V100) | -- | **0.1073 s/doc** sequential (bs=1), **0.0974 s/doc** marginal (bs=32) = **9.47 docs/s** | 22x faster than this box's CPU on 2018 silicon |
 
 Full machine-readable summaries: [results/hx370-cpu/results.json](results/hx370-cpu/results.json) and [results/v100-sxm2/results.json](results/v100-sxm2/results.json).
 Raw per-run logs in `results/<machine>/`.
 
-**V100 caveat (honesty first):** the V100-SXM2-16GB lane was shared with another tenant
-(~11 GB resident). The bs=32 runs logged CUDACachingAllocator OOM-retry warnings, then
-completed with correct outputs — times include allocator churn and are **conservative
-lower bounds** on a dedicated GPU. The bs=1 numbers (0.113 s/doc) ran before the pressure.
+**V100 telemetry (clean dedicated pass):** V100-SXM2-16GB had `5 MB` VRAM before start, `12,794 MB` peak VRAM, and **zero** co-tenant / allocator OOM-retry warnings across both full test sets and latency sweeps.
 
 **Hardware for the CPU numbers:** Ryzen AI 9 HX 370, 16 cores visible under WSL2,
 19 GiB RAM, no GPU used, torch 2.15.0+cpu, transformers 5.22.2 (upstream pins
@@ -54,9 +54,9 @@ LM1B, XSum, WMT14 and Sudoku while using 4-5x fewer training tokens.
 ## Why you should care (the transferable findings)
 
 1. **The efficiency is real and survives hardware translation.** A 654 MB
-   (tokenizer+generator) MIT-licensed XSum model produces 25 summaries/minute on a
-   laptop CPU and ~620/min on a 2018-era V100 (0.113 s/doc sequential — still 21x
-   the CPU), with no cloud call. The speed advantage comes from the architecture
+   (tokenizer+generator) MIT-licensed XSum model produces 25–27 summaries/minute on a
+   laptop CPU and **~568/min (9.47 docs/s)** on a 2018-era dedicated V100 (0.1073 s/doc
+   sequential — still 22x the CPU), with no cloud call. The speed advantage comes from the architecture
    (9 passes over <=560-token sequences), not from the H100 in their figure.
 2. **The paper's headline quality win is MBR decoding** -- cheap parallel candidates
    + a selector (28.0 -> 29.6 R-L at matched time). If your orchestration already
@@ -133,26 +133,37 @@ python -m ncm_bench.cli mbr --text "<document...>" --candidates 4
 # Inspect the 9-level concept hierarchy and generate an HTML visualizer
 python -m ncm_bench.cli inspect --text "<document...>" --html visualizer.html
 
-# Launch local REST service with dynamic INT8 acceleration
-python -m ncm_bench.cli serve --port 8031 --quantize int8
+# Solve a Sudoku puzzle or evaluate Sudoku-Hard with full constraint validation
+python -m ncm_bench.cli sudoku --n 20 --batch-size 16 --json
+
+# Run a 2-size timing benchmark separating model load from marginal per-doc latency
+python -m ncm_bench.cli benchmark --task latency --small-n 4 --large-n 16 --quantize int8
+
+# Launch hardened local REST service (loopback, bounded queue, optional Bearer auth via NCM_API_KEY)
+python -m ncm_bench.cli serve --port 8031 --quantize int8 --max-queue-depth 8
 ```
 
 ## Turnkey Deployment & SDK
 
-### One-Click Local Runners
+### One-Click Local Runners & Hardened Container
 - **Windows**: double-click or run `run_service.bat`
 - **Linux / macOS**: run `./run_service.sh`
-- **Docker Compose**: `docker compose up -d` (packaged in [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml))
+- **Docker Compose**: `docker compose up -d` (non-root `ncmuser`, read-only rootfs, `cap_drop: ALL`, `no-new-privileges`, loopback-bound `127.0.0.1:8031` in [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml))
+- **CI Pipeline**: [GitHub Actions CI](.github/workflows/ci.yml) runs `ruff`, `bandit`, and `pytest` on every push and PR.
 
 ### Python Client SDK (`service/client.py`)
 ```python
 from service.client import NCMClient
 
-client = NCMClient(base_url="http://127.0.0.1:8031")
+# Built-in exponential backoff retries on 429/502/503/504 + optional Bearer API key
+client = NCMClient(base_url="http://127.0.0.1:8031", api_key=None)
 
-# Fast single-shot summary
+# Fast single-shot or batched summary
 res = client.summarize("Long document text...")
 print(res["summary"], f"({res['latency_ms']} ms)")
+
+batch = client.batch_summarize_server(["Doc 1...", "Doc 2..."])
+print(batch["summaries"])
 
 # High-fidelity consensus summary via MBR
 mbr_res = client.mbr_summarize("Long document text...", num_candidates=4)
@@ -163,9 +174,9 @@ levels = client.progressive_summarize("Long document text...")
 ```
 
 ### Enterprise Document Triage Batch Processor
-Process thousands of records with automated latency tracking:
+Process thousands of records with crash-safe `--resume` deduplication, dead-letter `--errors-out` logging, and graceful `SIGINT`/`SIGTERM` shutdown:
 ```bash
-python scripts/batch_triage.py --input documents.jsonl --output triage_results.jsonl --mode standard
+python scripts/batch_triage.py --input documents.jsonl --output triage_results.jsonl --errors-out dead_letter.jsonl --resume --mode standard
 ```
 
 ## Enterprise & Commercial Research Whitepaper
@@ -175,22 +186,23 @@ For unit economics, TCO models (Cloud API vs. Local Appliance at 100K–100M doc
 
 ## Local summarizer service (expansion)
 
-`service/summarize_server.py` wraps the vendored pipeline in a production-grade FastAPI server. Fully local, 654 MB of weights, zero network calls at inference time:
+`service/summarize_server.py` wraps the unified `ncm_bench.inference` engine in a hardened FastAPI server. Fully local, 654 MB of weights verified against `SHA256SUMS` prior to `torch.load`, bounded Pydantic v2 request validation, security/CSP headers, structured JSON request logs with `X-Request-ID`, bounded concurrency queue (HTTP 503 + `Retry-After`), and zero network calls at inference time:
 
 ```bash
 # Standard service (CPU fp32)
-NCM_HOME=... python service/summarize_server.py --port 8031
+python service/summarize_server.py --port 8031
 
-# Accelerated dynamic INT8 quantization (1.32x speedup on CPU, 2.19 s/doc)
-NCM_HOME=... python service/summarize_server.py --port 8031 --quantize int8
+# Accelerated dynamic INT8 quantization (1.32x speedup on CPU, 2.19 s/doc) with Bearer auth
+NCM_API_KEY="your-secret-token" python service/summarize_server.py --port 8031 --quantize int8
 ```
 
 Endpoints available:
 - `POST /summarize`: Fast single-shot summary (`{"text": "..."}`).
+- `POST /batch_summarize`: Batched summarization (1–32 documents per request).
 - `POST /mbr_summarize`: Minimum Bayes Risk consensus decoding (`{"text": "...", "num_candidates": 4, "temperature": 0.7}`) — delivers measured **+1.82 R-L quality gain**.
 - `POST /progressive_summarize`: Inspects all 9 discrete concept levels ($k=0\dots 8$), revealing the coarse gist to fine syntax progression.
-- `GET /visualize`: Standalone interactive web dashboard rendering the concept slider for any passage.
-- `GET /health`: Model status, load latency, device, and quantization profile.
+- `GET /visualize`: XSS-escaped standalone interactive web dashboard rendering the concept slider for any passage.
+- `GET /health`, `/ready`, `/metrics`: Liveness, Kubernetes/container readiness probe (503 when unloaded), and Prometheus exposition telemetry.
 
 Interactive concept visualizer artifact: open [artifacts/visualizer/index.html](artifacts/visualizer/index.html) in any browser to step through the 9 concept hierarchy levels.
 

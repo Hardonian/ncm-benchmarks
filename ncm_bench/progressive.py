@@ -4,62 +4,34 @@ Decodes the latent representations across all intermediate code levels (0..K-1),
 demonstrating the coarse-to-fine concept evolution from high-level semantic gist
 to syntactically detailed text.
 """
+from __future__ import annotations
+
+import html
 from typing import Any
+
 import torch
 
-
-def decode_logits_to_text(logits: torch.Tensor, model_bundle: dict) -> str:
-    """Decodes raw logits tensor [1, T, V] into clean text with EOS cut."""
-    S = model_bundle
-    B, T, V = logits.shape
-    lg = logits.double()
-    allow = (S["allow"][:V] * T) if S["allow"] is not None else None
-    al = S["adj"][0] if S["adj"] else 0.0
-    aw = int(S["adj"][1]) if S["adj"] and len(S["adj"]) > 1 else 1
-    ad = S["adj"][2] if S["adj"] and len(S["adj"]) > 2 else 1.0
-
-    cnt = torch.zeros(1, V, dtype=torch.float64, device=lg.device)
-    out = torch.empty(1, T, dtype=torch.long, device=lg.device)
-    hist = []
-    for t in range(T):
-        step = lg[0:1, t, :].clone()
-        if S["freq"] > 0:
-            excess = (cnt - allow).clamp_min(0.0) if allow is not None else cnt
-            step -= S["freq"] * excess
-            if S["mu"] > 0 and allow is not None:
-                step += S["mu"] * ((T - t) / T) * (allow - cnt).clamp_min(0.0)
-        for j, h in enumerate(reversed(hist[-aw:])):
-            step.scatter_add_(1, h[:, None], torch.full((1, 1), -al * ad ** j, dtype=torch.float64, device=lg.device))
-        p = step.argmax(-1)
-        out[:, t] = p
-        hist.append(p)
-        cnt.scatter_add_(1, p[:, None], torch.ones(1, 1, dtype=torch.float64, device=lg.device))
-
-    row = out[0].tolist()
-    if S["EOS"] in row:
-        row = row[:row.index(S["EOS"])]
-    clean_ids = [t for t in row if t not in (S["EOS"], S["PAD"])]
-    return S["tk"].pre_tokenizer.decode(clean_ids, skip_special_tokens=True).strip()
+from ncm_bench.inference import decode_logits_to_texts, prepare_prefix_batch
 
 
 def progressive_decode(
     model_bundle: dict,
-    text: str,
+    text: str | list[int],
     temperature: float = 0.0,
     top_k: int = 50,
     top_p: float = 0.9,
-    use_penalties: bool = True
+    use_penalties: bool = True,
 ) -> dict[str, Any]:
     """Generates the full concept sequence and decodes each intermediate scale.
-    
+
     Returns:
         dict containing 'levels': list of dicts with level index, code count, and decoded text.
     """
     S = model_bundle
-    ids = S["src"](text)["input_ids"]
-    x = torch.tensor([(ids[:S["P"]] + [S["PAD"]] * S["P"])[:S["P"]]], device=S["device"])
+    x = prepare_prefix_batch(S, [text])
+    eos = S["EOS"] if S["EOS"] is not None else 50256
 
-    with torch.no_grad():
+    with torch.inference_mode():
         g = S["net"].generate(
             None,
             x,
@@ -67,35 +39,26 @@ def progressive_decode(
             top_k=top_k,
             top_p=top_p,
             cfg_scale=0.0,
-            cfg_null_eos=S["EOS"]
+            cfg_null_eos=eos,
         )
         _, zl = S["tk"].vqvae.vq.idx_to_zhats(g, return_zlevels=True)
+        level_logits = [S["tk"].vqvae.decoder(z_k) for z_k in zl]
 
     levels_info = []
     level_dims = S["net"].levels
+    raw_bundle = S if use_penalties else {**S, "freq": 0.0, "adj": None}
 
-    for k, z_k in enumerate(zl):
-        with torch.no_grad():
-            logits_k = S["tk"].vqvae.decoder(z_k)
-        
-        if use_penalties:
-            decoded_text = decode_logits_to_text(logits_k, S)
-        else:
-            raw_ids = logits_k[0].argmax(-1).tolist()
-            if S["EOS"] in raw_ids:
-                raw_ids = raw_ids[:raw_ids.index(S["EOS"])]
-            decoded_text = S["tk"].pre_tokenizer.decode(
-                [t for t in raw_ids if t not in (S["EOS"], S["PAD"])],
-                skip_special_tokens=True
-            ).strip()
-
-        levels_info.append({
-            "level": k,
-            "codes_at_level": level_dims[k],
-            "total_codes_so_far": sum(level_dims[:k+1]),
-            "text": decoded_text,
-            "words": len(decoded_text.split()),
-        })
+    for k, logits_k in enumerate(level_logits):
+        decoded_text = decode_logits_to_texts(logits_k, raw_bundle)[0]
+        levels_info.append(
+            {
+                "level": k,
+                "codes_at_level": int(level_dims[k]),
+                "total_codes_so_far": int(sum(level_dims[: k + 1])),
+                "text": decoded_text,
+                "words": len(decoded_text.split()),
+            }
+        )
 
     return {
         "num_levels": len(zl),
@@ -105,25 +68,31 @@ def progressive_decode(
 
 
 def render_progressive_html(result: dict[str, Any], prompt_text: str = "") -> str:
-    """Generates a standalone, dark-themed HTML interactive slider visualizer."""
+    """Generates a standalone, XSS-safe dark-themed HTML interactive slider visualizer."""
     levels = result["levels"]
     rows = []
     for lvl in levels:
-        pct = round((lvl["level"] + 1) / len(levels) * 100)
-        rows.append(f"""
-        <div class="level-card" id="card-{lvl['level']}">
+        pct = round((lvl["level"] + 1) / max(len(levels), 1) * 100)
+        escaped_text = html.escape(str(lvl.get("text", "")), quote=True)
+        body_html = escaped_text if escaped_text else "<i>(initial semantic codes)</i>"
+        rows.append(
+            f"""
+        <div class="level-card" id="card-{int(lvl['level'])}">
             <div class="level-header">
-                <span class="badge">Level {lvl['level']}</span>
-                <span class="meta">{lvl['codes_at_level']} codes ({lvl['total_codes_so_far']} accumulated)</span>
+                <span class="badge">Level {int(lvl['level'])}</span>
+                <span class="meta">{int(lvl['codes_at_level'])} codes ({int(lvl['total_codes_so_far'])} accumulated)</span>
                 <span class="pct">{pct}% fidelity</span>
             </div>
             <div class="level-body">
-                <p class="text-output">{lvl['text'] or '<i>(initial semantic codes)</i>'}</p>
+                <p class="text-output">{body_html}</p>
             </div>
         </div>
-        """)
+        """
+        )
 
     cards_html = "\n".join(rows)
+    safe_prompt = html.escape(prompt_text, quote=True) if prompt_text else "N/A"
+    max_level = max(len(levels) - 1, 0)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -135,7 +104,7 @@ def render_progressive_html(result: dict[str, Any], prompt_text: str = "") -> st
   .container {{ max-width: 800px; margin: 0 auto; }}
   h1 {{ font-size: 1.5rem; color: #38bdf8; margin-bottom: 8px; }}
   .subtitle {{ color: #94a3b8; font-size: 0.95rem; margin-bottom: 24px; }}
-  .prompt-box {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 0.9rem; line-height: 1.5; }}
+  .prompt-box {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 24px; font-size: 0.9rem; line-height: 1.5; word-break: break-word; }}
   .slider-container {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 24px; }}
   input[type=range] {{ width: 100%; accent-color: #38bdf8; cursor: pointer; }}
   .level-card {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin-bottom: 12px; transition: all 0.2s ease; }}
@@ -150,10 +119,10 @@ def render_progressive_html(result: dict[str, Any], prompt_text: str = "") -> st
 <div class="container">
   <h1>Next-Concept Modeling: Coarse-to-Fine Concept Progression</h1>
   <div class="subtitle">Generating text in discrete concept hierarchies (arXiv:2610.14162). Real hardware reproduction.</div>
-  
+
   <div class="prompt-box">
     <strong style="color: #cbd5e1;">Input Document:</strong><br/>
-    {prompt_text or 'N/A'}
+    {safe_prompt}
   </div>
 
   <div class="slider-container">
@@ -161,7 +130,7 @@ def render_progressive_html(result: dict[str, Any], prompt_text: str = "") -> st
         <span style="font-weight: 600;">Concept Level: <span id="lvl-label" style="color: #38bdf8;">All Levels</span></span>
         <span style="font-size: 0.85rem; color: #94a3b8;">Slide to inspect individual hierarchy steps</span>
     </div>
-    <input type="range" id="levelRange" min="-1" max="{len(levels)-1}" value="-1" oninput="updateView(this.value)">
+    <input type="range" id="levelRange" min="-1" max="{max_level}" value="-1" oninput="updateView(this.value)">
   </div>
 
   <div id="cards-wrapper">
@@ -186,4 +155,3 @@ function updateView(val) {{
 </body>
 </html>
 """
-

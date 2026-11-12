@@ -1,5 +1,4 @@
-import pytest
-from ncm_bench.mbr import select_mbr_centroid, compute_pairwise_rouge_l, compute_pairwise_jaccard
+from ncm_bench.mbr import select_mbr_centroid
 
 
 def test_select_mbr_centroid_single():

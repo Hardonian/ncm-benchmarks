@@ -19,9 +19,11 @@ os.environ["NCM_ROOT"] = str(ROOT / "ncm")
 os.environ["NCM_DEVICE"] = "cpu"
 sys.path.insert(0, str(ROOT))
 
-from service.summarize_server import load
-from ncm_bench.mbr import generate_mbr_summary
-from ncm_bench.metrics import score_rouge
+from ncm_bench.inference import verify_file_integrity  # noqa: E402
+from ncm_bench.mbr import generate_mbr_summary  # noqa: E402
+from ncm_bench.metrics import score_rouge  # noqa: E402
+from service.summarize_server import load  # noqa: E402
+
 
 def main():
     print("=" * 60)
@@ -38,10 +40,12 @@ def main():
     print("[2/4] Loading test dataset...")
     passages_path = ROOT / "data/xsum/passages.pickle"
     refs_path = ROOT / "data/xsum/reference_summaries.pickle"
+    verify_file_integrity(passages_path, ROOT)
+    verify_file_integrity(refs_path, ROOT)
     with open(passages_path, "rb") as f:
-        passages = pickle.load(f)
+        passages = pickle.load(f)  # nosec B301 - verified by SHA256SUMS
     with open(refs_path, "rb") as f:
-        refs = pickle.load(f)
+        refs = pickle.load(f)  # nosec B301 - verified by SHA256SUMS
     
     # Run on n=8 documents for statistically solid and fast comparison
     n_docs = 8

@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+
 import torch
 
 os.environ["NCM_HOME"] = os.getcwd()
@@ -8,7 +9,7 @@ os.environ["NCM_ROOT"] = os.path.join(os.getcwd(), "ncm")
 os.environ["NCM_DEVICE"] = "cpu"
 sys.path.insert(0, os.getcwd())
 
-from service.summarize_server import load, summarize
+from service.summarize_server import load, summarize  # noqa: E402
 
 print("[Quant Test] Loading fp32 model...")
 S = load("artifacts/xsum/config.yaml", "artifacts/xsum", "cpu")

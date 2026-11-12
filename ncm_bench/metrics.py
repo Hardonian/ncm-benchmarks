@@ -8,6 +8,7 @@ Implements:
 """
 import math
 from typing import Any
+
 from rouge_score import rouge_scorer
 
 
@@ -16,7 +17,7 @@ def score_rouge(hyps: list[str], refs: list[str]) -> dict[str, float]:
     assert len(hyps) == len(refs), f"Length mismatch: {len(hyps)} hyps vs {len(refs)} refs"
     scorer = rouge_scorer.RougeScorer(["rouge1", "rouge2", "rougeL"], use_stemmer=True)
     r1, r2, rl = [], [], []
-    for h, r in zip(hyps, refs):
+    for h, r in zip(hyps, refs, strict=True):
         s = scorer.score(r, h)
         r1.append(s["rouge1"].fmeasure)
         r2.append(s["rouge2"].fmeasure)
@@ -55,32 +56,64 @@ def wilson_ci(k: int, n: int, confidence: float = 0.95) -> dict[str, float]:
     }
 
 
-def score_sudoku(preds: list[list[int]], solutions: list[list[int]]) -> dict[str, Any]:
-    """Evaluates Sudoku board predictions against ground truth solutions.
-    
-    Boards are 81-integer sequences.
+def is_valid_sudoku_board(board: str | list[int]) -> bool:
+    """Checks whether an 81-cell Sudoku board satisfies all row, column, and 3x3 box constraints.
+
+    Matches upstream `scripts/eval_merge.py exact()` validity logic.
     """
+    if isinstance(board, list):
+        # Strip pipe separators (10) and BOS (11) if raw token sequence
+        cells = "".join(str(x) for x in board if 0 <= int(x) <= 9)
+    else:
+        cells = board.replace("|", "")
+    if len(cells) != 81 or not cells.isdigit() or "0" in cells:
+        return False
+    rows = [cells[i * 9 : (i + 1) * 9] for i in range(9)]
+    cols = ["".join(r[j] for r in rows) for j in range(9)]
+    boxes = [
+        "".join(rows[r][c] for r in range(br, br + 3) for c in range(bc, bc + 3))
+        for br in (0, 3, 6)
+        for bc in (0, 3, 6)
+    ]
+    target = list("123456789")
+    return all(sorted(group) == target for group in rows + cols + boxes)
+
+
+def score_sudoku(preds: list[list[int] | str], solutions: list[list[int] | str]) -> dict[str, Any]:
+    """Evaluates Sudoku board predictions against ground truth solutions."""
     assert len(preds) == len(solutions), f"Mismatch: {len(preds)} preds vs {len(solutions)} solutions"
     n = len(preds)
     exact_matches = 0
-    total_cells = n * 81
+    total_cells = 0
     correct_cells = 0
-    valid_format = 0
+    constraint_valid = 0
+    format_valid = 0
 
-    for pred, sol in zip(preds, solutions):
-        if len(pred) == 81:
-            valid_format += 1
-        cells_correct = sum(1 for p, s in zip(pred, sol) if p == s)
-        correct_cells += cells_correct
-        if cells_correct == 81:
+    def _to_cells(seq: list[int] | str) -> list[int]:
+        if isinstance(seq, str):
+            return [int(c) if c.isdigit() else 0 for c in seq.replace("|", "")]
+        return [int(x) for x in seq if int(x) != 10]
+
+    for pred, sol in zip(preds, solutions, strict=True):
+        p_cells = _to_cells(pred)
+        s_cells = _to_cells(sol)
+        if len(p_cells) == len(s_cells):
+            format_valid += 1
+        total_cells += len(s_cells)
+        matches = sum(1 for p, s in zip(p_cells, s_cells, strict=False) if p == s)
+        correct_cells += matches
+        if matches == len(s_cells) and len(p_cells) == len(s_cells):
             exact_matches += 1
+        if is_valid_sudoku_board(pred):
+            constraint_valid += 1
 
     ci = wilson_ci(exact_matches, n)
     return {
         "n_boards": n,
-        "solved_pct": round(exact_matches / n * 100.0, 2),
-        "cell_pct": round(correct_cells / total_cells * 100.0, 2),
-        "valid_pct": round(valid_format / n * 100.0, 2),
+        "solved_pct": round(exact_matches / max(n, 1) * 100.0, 2),
+        "cell_pct": round(correct_cells / max(total_cells, 1) * 100.0, 2),
+        "valid_pct": round(constraint_valid / max(n, 1) * 100.0, 2),
+        "format_valid_pct": round(format_valid / max(n, 1) * 100.0, 2),
         "solved_count": exact_matches,
         "ci_95": ci,
     }

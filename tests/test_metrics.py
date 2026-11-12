@@ -1,5 +1,4 @@
-import pytest
-from ncm_bench.metrics import score_rouge, score_sudoku, wilson_ci, two_size_timing
+from ncm_bench.metrics import score_rouge, score_sudoku, two_size_timing, wilson_ci
 
 
 def test_wilson_ci_known_values():
