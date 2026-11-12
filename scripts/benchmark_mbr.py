@@ -99,11 +99,14 @@ def main():
     print("=" * 60)
     
     # Save results
+    import json
     out_dir = ROOT / "results/hx370-cpu/mbr"
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "mbr_results.pickle", "wb") as f:
         pickle.dump(results, f)
-    print(f"Saved MBR benchmark results to {out_dir / 'mbr_results.pickle'}")
+    with open(out_dir / "results.json", "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2)
+    print(f"Saved MBR benchmark results to {out_dir / 'results.json'} and {out_dir / 'mbr_results.pickle'}")
 
 if __name__ == "__main__":
     main()
