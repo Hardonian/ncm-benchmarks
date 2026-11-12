@@ -18,7 +18,9 @@ Weights and evaluation data
   https://huggingface.co/hazyresearch/ncm-checkpoints (xsum, sudoku/hard used here)
   https://huggingface.co/datasets/hazyresearch/ncm-datasets
   Exact file bytes verified via SHA256SUMS in this repo (computed from our local
-  copies used for the measured runs).
+  copies used for the measured runs, which live under `$NCM_HOME/artifacts` and
+  `$NCM_HOME/data` — `/home/scott/ai-lab/ncm/{artifacts,data}` on the benchmark
+  machines; `scripts/as-run/fetch_artifacts.sh` has the as-invoked absolute paths).
 
 Base tokenizer provenance (from the released eval configs)
   XSum:    GPT-2 BPE                       (MIT)
@@ -36,4 +38,6 @@ Risk note (accepted, documented)
   both execute attacker-controlled code if provenance is broken. We downloaded only
   from the official hazyresearch org over HTTPS, pinned file sizes against the HF
   API, and record sha256 of every artifact used. Re-verify with
-  `sha256sum -c SHA256SUMS` before trusting our numbers.
+  `sha256sum -c <repo>/SHA256SUMS` run from `$NCM_HOME` (the directory holding
+  `artifacts/` and `data/`; `scripts/fetch_artifacts.sh` populates them under the
+  repo root by default) before trusting our numbers.

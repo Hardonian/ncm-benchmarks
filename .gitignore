@@ -1,6 +1,7 @@
 # never commit model blobs, raw datasets, venvs, or shard pickles
-artifacts/
-data/
+# (no trailing slash: also matches symlinked artifact dirs used for SHA256SUMS verification)
+artifacts
+data
 hf-home/
 venv/
 .venv*/
