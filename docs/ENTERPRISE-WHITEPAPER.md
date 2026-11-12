@@ -155,3 +155,4 @@ print("Latency:", result["latency_ms"], "ms")
 Next-Concept Modeling provides proof that the industry's default reliance on 70B cloud autoregressive LLMs for basic document classification and triage is an inefficient legacy pattern. 
 
 By replacing sequential token iteration with multiscale discrete concept refinement, enterprises can achieve **100% data sovereignty, sub-$0.00 marginal unit economics, and verified accuracy on existing infrastructure**.
+

@@ -23,3 +23,4 @@ fi
 
 echo "Using Python: $PY"
 exec $PY service/summarize_server.py --port 8031 --host 127.0.0.1 --quantize int8
+

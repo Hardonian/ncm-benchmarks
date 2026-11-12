@@ -38,3 +38,4 @@ ncm-bench = "ncm_bench.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["ncm_bench*", "service*"]
+

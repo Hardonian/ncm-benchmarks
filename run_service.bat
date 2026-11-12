@@ -22,3 +22,4 @@ if exist "%~dp0.venv-cpu\Scripts\python.exe" (
 echo Using Python: %PY%
 %PY% service\summarize_server.py --port 8031 --host 127.0.0.1 --quantize int8
 endlocal
+

@@ -43,3 +43,4 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
 
 ENTRYPOINT ["python", "service/summarize_server.py"]
 CMD ["--host", "0.0.0.0", "--port", "8031", "--quantize", "int8"]
+

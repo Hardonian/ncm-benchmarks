@@ -36,3 +36,4 @@ def test_cli_mbr_mocked():
             with patch.object(sys, "argv", ["ncm-bench", "mbr", "--text", "Sample text", "--candidates", "2"]):
                 main()
                 mock_mbr.assert_called_once()
+

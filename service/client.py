@@ -85,3 +85,4 @@ class NCMClient:
             res["doc_index"] = idx
             results.append(res)
         return results
+

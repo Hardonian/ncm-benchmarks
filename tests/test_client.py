@@ -55,3 +55,4 @@ def test_client_batch():
         assert len(batch_res) == 2
         assert batch_res[0]["summary"] == "Sum"
         assert "client_elapsed_s" in batch_res[0]
+
