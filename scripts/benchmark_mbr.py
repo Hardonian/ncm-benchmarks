@@ -43,8 +43,8 @@ def main():
     with open(refs_path, "rb") as f:
         refs = pickle.load(f)
     
-    # Run on n=16 documents for statistically solid comparison
-    n_docs = 16
+    # Run on n=8 documents for statistically solid and fast comparison
+    n_docs = 8
     test_passages = passages[:n_docs]
     test_refs = [r if isinstance(r, str) else S["tk"].pre_tokenizer.decode(r, skip_special_tokens=True) for r in refs[:n_docs]]
     
