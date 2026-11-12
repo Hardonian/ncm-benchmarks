@@ -62,7 +62,11 @@ LM1B, XSum, WMT14 and Sudoku while using 4-5x fewer training tokens.
    + a selector (28.0 -> 29.6 R-L at matched time). If your orchestration already
    does draft-select ensembles, this is literature validation; if not, copy it.
 3. **Pitfalls you will actually hit** (all cost us a failed run, all fixed here):
-   - upstream eval harness hardcodes `.cuda()` in 7 sites (see `patches/`);
+   - upstream eval harness hardcodes the CUDA device in 7 sites of
+     `scripts/eval_shard.py` (3x `.cuda()`, 2x `map_location="cuda"`,
+     2x `device="cuda"`) — all replaced by an `NCM_DEVICE`-resolved constant
+     (`patches/device-support.patch`, clean-applies at the pinned SHA, verified
+     with `git apply --check` + `python3 -m py_compile`);
    - `scripts/eval_merge.py`'s ROUGE function drags a CUDA GPT-2 in for genPPL even
      when you only want ROUGE (see `scripts/score_rouge_cpu.py`);
    - `huggingface-cli` v2 silently ignores multiple `--include` globs -- pass
