@@ -71,7 +71,7 @@ def select_mbr_centroid(
 
 def generate_mbr_summary(
     model_bundle: dict,
-    text: str,
+    text: str | list[int],
     num_candidates: int = 4,
     temperature: float = 0.7,
     top_k: int = 50,
@@ -80,7 +80,10 @@ def generate_mbr_summary(
 ) -> dict:
     """Generates K parallel candidates with temperature sampling and selects MBR centroid."""
     S = model_bundle
-    ids = S["src"](text)["input_ids"]
+    if isinstance(text, str):
+        ids = S["src"](text)["input_ids"]
+    else:
+        ids = list(text)
     x_single = (ids[:S["P"]] + [S["PAD"]] * S["P"])[:S["P"]]
     
     # Batch candidates together in a single tensor of shape [K, prefix_len]
