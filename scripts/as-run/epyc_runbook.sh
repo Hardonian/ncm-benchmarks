@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# NCM V100 benchmark runner — execute ON EPYC after cross-node auth clears.
+# NCM V100 benchmark runner — execute ON EPYC after Tailscale auth clears.
 # Verifies paper claims on our GPU lane: sudoku-hard full 2000 boards + XSum n=1000 + bs=1 latency.
 set -Eeuo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+export CUDA_VISIBLE_DEVICES=0
 ROOT=${NCM_ROOT_DIR:-$HOME/ai-lab/ncm}
 mkdir -p "$ROOT/logs"
 cd "$ROOT"
@@ -19,18 +21,19 @@ PY="$ROOT/venv/bin/python"
 $PY -c 'import torch; assert torch.cuda.is_available(), "no CUDA"; print("GPU:", torch.cuda.get_device_name(0), "bf16:", torch.cuda.get_device_capability())'
 
 # artifacts (explicit filenames; hf v2 quirk)
+cd "$ROOT"
 mkdir -p artifacts data
 export HF_HOME="$ROOT/hf-home" HF_HUB_CACHE="$ROOT/hf-home/hub" TRANSFORMERS_CACHE="$ROOT/hf-home/hub" HF_HUB_DISABLE_XET=1
-[ -f artifacts/xsum/generator.pt ] || hf download hazyresearch/ncm-checkpoints \
+[ -f artifacts/xsum/generator.pt ] || "$ROOT/venv/bin/hf" download hazyresearch/ncm-checkpoints \
   xsum/config.yaml xsum/generator.pt xsum/tokenizer.pt \
   sudoku/hard/config.yaml sudoku/hard/generator.pt sudoku/hard/tokenizer.pt --local-dir artifacts > logs/hf-ckpts.log 2>&1
-[ -f data/xsum/passages.pickle ] || hf download hazyresearch/ncm-datasets \
+[ -f data/xsum/passages.pickle ] || "$ROOT/venv/bin/hf" download hazyresearch/ncm-datasets \
   xsum/passages.pickle xsum/reference_summaries.pickle sudoku/hard/puzzles.pickle sudoku/hard/solutions.pickle \
   --repo-type dataset --local-dir data > logs/hf-data.log 2>&1
 
 export NCM_ROOT="$ROOT/ncm" NCM_DEVICE=cuda TOKENIZERS_PARALLELISM=false
 
-run() { # $1 name, $2 config, $3 ckptdir, $4 datadir, $5 n, $6 bs
+run() { cd "$ROOT/ncm"  # $1 name, $2 config, $3 ckptdir, $4 datadir, $5 n, $6 bs
   mkdir -p "$ROOT/results/$1"
   echo "$1 n=$5 bs=$6 start=$(date -u +%FT%TZ)" | tee "$ROOT/results/$1/run.meta"
   { time $PY scripts/eval_shard.py --config "config/eval/$2" \

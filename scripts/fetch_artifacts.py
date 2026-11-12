@@ -23,6 +23,9 @@ from transformers import AutoTokenizer
 CKPT_REPO = "hazyresearch/ncm-checkpoints"
 DATA_REPO = "hazyresearch/ncm-datasets"
 
+CKPT_REVISION = "d342ce8aaea58830eef3b8ad473664673e41f692"  # hazyresearch/ncm-checkpoints @ 2026-11-11
+DATA_REVISION = "6580ba41a4b0a976dde876fbe84d25327617b0e6"   # hazyresearch/ncm-datasets @ 2026-11-11
+
 CKPT_FILES = [
     "xsum/config.yaml",
     "xsum/generator.pt",
@@ -77,7 +80,7 @@ def main():
             print(f"[fetch] Checkpoint verified: {rel_path}")
             continue
         print(f"[fetch] Downloading checkpoint: {fname}...")
-        downloaded = hf_hub_download(repo_id=CKPT_REPO, filename=fname, local_dir=str(artifacts_dir))
+        downloaded = hf_hub_download(repo_id=CKPT_REPO, filename=fname, revision=CKPT_REVISION, local_dir=str(artifacts_dir))
         print(f"[fetch] Downloaded {fname} -> {downloaded}")
 
     # 2. Datasets
@@ -90,7 +93,7 @@ def main():
             print(f"[fetch] Dataset verified: {rel_path}")
             continue
         print(f"[fetch] Downloading dataset: {fname}...")
-        downloaded = hf_hub_download(repo_id=DATA_REPO, repo_type="dataset", filename=fname, local_dir=str(data_dir))
+        downloaded = hf_hub_download(repo_id=DATA_REPO, repo_type="dataset", filename=fname, revision=DATA_REVISION, local_dir=str(data_dir))
         print(f"[fetch] Downloaded {fname} -> {downloaded}")
 
     # 3. Pinned GPT-2 Tokenizer (needed for offline inference)

@@ -1,0 +1,6 @@
+xsum_bs32_n1000 n=1000 bs=32 start=2026-11-12T01:15:02Z
+[W1111 20:15:10.799261845 CUDACachingAllocator.cpp:3934] memory allocation failed with OOM on device 0 while trying to allocate 220200960 bytes (free: 122683392, total: 16928342016).
+
+real	1m43.390s
+user	0m40.912s
+sys	1m12.178s

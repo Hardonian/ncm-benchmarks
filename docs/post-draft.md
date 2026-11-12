@@ -45,7 +45,13 @@ all cores at a single document; the speed comes from the architecture (9 passes,
 sequences), not from squeezing more in parallel. If your capacity plan assumed batch
 amortization on CPU, this kills that assumption — with receipts.
 
-V100 lane: [PENDING — link with measured summaries/sec + full sudoku 2000 when EPYC leg lands]
+V100 lane (our EPYC box, same patched code, same fp32): Sudoku **full 2000-board
+test: 86.30% solved vs paper's 86.1% — exact-configuration reproduction, +0.2 pp.**
+XSum 1000 docs bs=32: R-L 27.78 (paper 28.0 full set). Sequential latency 0.113 s/doc,
+throughput 10.4 docs/s. That's 21x the laptop CPU on the same 654 MB artifact — and a
+2018 GPU at that. One honest asterisk: our V100 had a co-tenant using ~11 GB during
+the bs=32 runs; allocator OOM-retries inflated wall times, so those are conservative
+floors, not ceilings.
 
 ## Why I care (the local-first angle)
 

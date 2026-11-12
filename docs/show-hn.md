@@ -8,12 +8,13 @@ Paper: Next-Concept Modeling (arXiv:2610.14162, MIT, Hazy Research) — text gen
 coarse-to-fine hierarchy of discrete codes, 8-32 parallel passes instead of 64-128 diffusion
 NFEs. Published speedups (21x/31x) were all H100.
 
-We benchmarked on hardware that exists in real homes: Ryzen AI 9 HX 370 CPU (16 cores, fp32),
-V100 lane pending. Scripted, sha256-pinned, reproducible.
+We benchmarked on hardware that exists in real homes: Ryzen AI 9 HX 370 CPU (16 cores, fp32)
+and an EPYC box with a shared V100-SXM2. Scripted, sha256-pinned, reproducible.
 
 Results:
-- Sudoku hard (25M model): 84.5% solved on 200 of their 2000 boards vs paper's 86.1% —
-  reproduces inside the ±5pp CI. 45 s total incl. load.
+- Sudoku hard, FULL 2000-board test on V100 (25M model): 86.3% solved vs paper's 86.1% —
+  exact-configuration reproduction. 26 s wall including load. On 200 of their boards with
+  a laptop CPU: 84.5%, also CI-consistent.
 - XSum (88M): R-L 27.10 on 96-doc subset vs paper 28.0 on full set.
 - Honest null: batch size 8 gives -1.9% gain over bs=1 on CPU. The fp32 GEMMs saturate all
   cores at one document. Papers never show you this row.
