@@ -1,0 +1,5 @@
+sudoku-hard cpu n=200 bs=64 start=2026-11-12T00:15:33Z
+
+real	0m45.169s
+user	5m11.046s
+sys	0m24.534s

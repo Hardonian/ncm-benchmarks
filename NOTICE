@@ -1,0 +1,39 @@
+Upstream provenance and notices
+===============================
+
+Model code
+  Repository: https://github.com/HazyResearch/ncm
+  Pinned SHA: c70274273f489abc73832b2b98584a8483b6b203 ("update bibtex", 2026-10-14)
+  License:    MIT (c) the NCM authors (Kumbong, Khare, Mlauzi, Woen, Ding, Buchanan,
+              Arora, Mirhoseini, Re) — Stanford Hazy Research / Together AI
+  Our modification: patches/device-support.patch — replaces 7 hardcoded CUDA device
+              sites in scripts/eval_shard.py with an NCM_DEVICE-resolved constant.
+              Apply with `git apply` on the pinned SHA. Nothing else is changed.
+
+Paper
+  "Next-Concept Modeling: Fast, Parallel Coarse-to-Fine Text Generation"
+  arXiv:2610.14162 [cs.CL], October 2026. https://arxiv.org/abs/2610.14162
+
+Weights and evaluation data
+  https://huggingface.co/hazyresearch/ncm-checkpoints (xsum, sudoku/hard used here)
+  https://huggingface.co/datasets/hazyresearch/ncm-datasets
+  Exact file bytes verified via SHA256SUMS in this repo (computed from our local
+  copies used for the measured runs).
+
+Base tokenizer provenance (from the released eval configs)
+  XSum:    GPT-2 BPE                       (MIT)
+  Sudoku:  FMLM+ custom digit tokenizer    (see upstream)
+  (bert-base-uncased / Qwen3 vocabularies are used by LM1B / WMT14 models only —
+   not exercised in this repo.)
+
+Evaluation protocol source
+  Generative-perplexity reference scoring follows the MDLM codebase protocol
+  (https://github.com/sahil280114/code-align-mdlm); ROUGE via rouge_score with
+  stemming, sacrebleu for BLEU — as configured upstream.
+
+Risk note (accepted, documented)
+  Checkpoints load with torch.load(weights_only=False) and eval shards are pickles —
+  both execute attacker-controlled code if provenance is broken. We downloaded only
+  from the official hazyresearch org over HTTPS, pinned file sizes against the HF
+  API, and record sha256 of every artifact used. Re-verify with
+  `sha256sum -c SHA256SUMS` before trusting our numbers.

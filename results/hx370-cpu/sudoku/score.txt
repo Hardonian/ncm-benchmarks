@@ -1,0 +1,5 @@
+
+merged 1 shards -> 200 sudoku-hard outputs
+
+ solved %  solved  cell %  valid %
+    84.50  169/200   98.35    84.50

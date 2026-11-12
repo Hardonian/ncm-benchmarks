@@ -1,0 +1,5 @@
+xsum cpu start=2026-11-12T00:30:21Z
+bs1 n=4 real	0m15.078s
+bs1 n=16 real	0m43.130s
+bs8 n=32 real	1m19.569s
+bs8 n=96 real	3m52.090s

@@ -1,0 +1,59 @@
+{
+  "machine": {
+    "host": "HX370 WSL2 Ubuntu 24.04",
+    "cpu": "Ryzen AI 9 HX 370 (16 cores visible)",
+    "ram": "19 GiB",
+    "device": "cpu fp32"
+  },
+  "software": {
+    "torch": "2.15.0+cpu",
+    "transformers": "5.22.2",
+    "upstream_repo": "HazyResearch/ncm",
+    "upstream_sha": "c70274273f489abc73832b2b98584a8483b6b203",
+    "patch": "patches/device-support.patch"
+  },
+  "runs": {
+    "sudoku_hard_cpu": {
+      "n": 200,
+      "of_total": 2000,
+      "batch_size": 64,
+      "wall_s_incl_load": 45.169,
+      "solved_pct": 84.5,
+      "cell_pct": 98.35,
+      "valid_pct": 84.5,
+      "paper_full_test_solved_pct": 86.1,
+      "subset_95ci_pp": 5.02,
+      "reproducible_within_ci": true
+    },
+    "xsum_cpu": {
+      "n": 96,
+      "of_total": 11334,
+      "batch_size": 8,
+      "rouge1": 33.46,
+      "rouge2": 12.33,
+      "rougeL": 27.1,
+      "avg_words": 20.9,
+      "paper_full_test": {
+        "rouge1": 35.0,
+        "rouge2": 12.8,
+        "rougeL": 28.0
+      },
+      "note": "subset ROUGE; not CI-quantified"
+    },
+    "latency_cpu": {
+      "model_load_s": 5.7,
+      "marginal_s_per_doc_bs1": 2.338,
+      "marginal_s_per_doc_bs8": 2.383,
+      "batching_gain_pct": -1.9,
+      "sustained_summaries_per_min": 25.2,
+      "verdict": "sub-second CPU latency FALSE on this box; 2.3 s/doc honest; batching ~0 gain (compute-saturated at bs=1)"
+    }
+  },
+  "environment_pitfalls_found": [
+    "upstream eval harness hardcodes .cuda()",
+    "machine-default HF_HOME on read-only /mnt/g -> pin HF_HOME+HF_HUB_CACHE+TRANSFORMERS_CACHE in-script",
+    "hf CLI v2 ignores multiple --include globs -> explicit filenames",
+    "xet backend fails on read-only cache -> HF_HUB_DISABLE_XET=1",
+    "upstream merge scorer pulls CUDA GPT-2 for CPU-scoreable metrics -> score_rouge_cpu.py"
+  ]
+}

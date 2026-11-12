@@ -1,0 +1,56 @@
+--- a/scripts/eval_shard.py
++++ b/scripts/eval_shard.py
+@@ -28,6 +28,8 @@
+ 
+ CFG = OmegaConf.load(a.config)
+ G = CFG.generation
++DEVICE = os.environ.get("NCM_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
++print(f"[eval_shard] device={DEVICE}", flush=True)
+ ck = a.checkpoint_dir or os.path.join("artifacts", CFG.task)
+ dd = a.data_dir or os.path.join(os.environ.get("NCM_DATA_ROOT", "data"), CFG.task)
+ pick = lambda cli, key, cast, default: cast(cli if cli is not None else G.get(key, default))
+@@ -47,8 +49,8 @@
+     if CFG.checkpoints.get(name):
+         CFG.tokenizer.pre_tokenizer[key] = os.path.join(ck, CFG.checkpoints[name])
+ tk = VQVAETokenizer.from_config(CFG.tokenizer)
+-tk.vqvae = tk.vqvae.cuda().eval()
+-net = NextConceptTransformer(vqvae_local=tk.vqvae, config=CFG.model).cuda()
++tk.vqvae = tk.vqvae.to(DEVICE).eval()
++net = NextConceptTransformer(vqvae_local=tk.vqvae, config=CFG.model).to(DEVICE)
+ sd = torch.load(os.path.join(ck, CFG.checkpoints.generator), map_location="cpu", weights_only=False)
+ net.load_state_dict(sd["model"], strict=True)
+ net.eval()
+@@ -59,11 +61,11 @@
+ def load_allowance(spec):
+     if ":" in spec:
+         path, ref = spec.split(":", 1)
+-        obj = torch.load(os.path.join(ck, path), map_location="cuda", weights_only=False)
++        obj = torch.load(os.path.join(ck, path), map_location=DEVICE, weights_only=False)
+         for k in ref.split("."):
+             obj = obj[k]
+         return obj.double()
+-    return torch.load(os.path.join(ck, spec), map_location="cuda").double()
++    return torch.load(os.path.join(ck, spec), map_location=DEVICE).double()
+ 
+ 
+ ALLOW = load_allowance(str(G.frequency_allowance)) if G.get("frequency_allowance") else None
+@@ -153,8 +155,8 @@
+         torch.manual_seed(seed)
+         for s in range(0, n, bs):
+             B = min(bs, n - s)
+-            l0 = torch.multinomial(L0_P.cpu(), B * L0, replacement=True).view(B, L0).cuda() if L0_P is not None else None
+-            hyps += run(torch.full((B, 1), EOS, device="cuda"), l0)
++            l0 = torch.multinomial(L0_P.cpu(), B * L0, replacement=True).view(B, L0).to(DEVICE) if L0_P is not None else None
++            hyps += run(torch.full((B, 1), EOS, device=DEVICE), l0)
+             sample_seed += [seed] * B
+         print(f"  shard{a.shard} seed {seed}: {n} samples", flush=True)
+     idxs = list(range(len(hyps)))
+@@ -163,7 +165,7 @@
+ else:
+     for s in range(0, len(idxs), bs):
+         batch = idxs[s:s + bs]
+-        hyps += run(torch.tensor([prefix(items[i]) for i in batch], device="cuda"))
++        hyps += run(torch.tensor([prefix(items[i]) for i in batch], device=DEVICE))
+         if a.shard == 0 and (s // bs) % 10 == 0:
+             print(f"  shard0 {s}/{len(idxs)}", flush=True)
+     out = {"idxs": idxs, "hyps": hyps, "refs": [r if isinstance(r, str) else dec(r) for r in (refs[i] for i in idxs)]}
