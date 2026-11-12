@@ -1,59 +1,96 @@
 {
-  "machine": {
-    "host": "EPYC (Ubuntu, Tailscale SSH)",
-    "gpu": "Tesla V100-SXM2-16GB (index 0, CUDA_VISIBLE_DEVICES=0)",
-    "device": "cuda fp32",
-    "sharing": "another tenant resident on same GPU during bs=32 runs; allocator OOM-retry warnings logged, runs completed correctly"
-  },
-  "software": {
-    "torch": "cu126 latest (uv venv python 3.12)",
-    "upstream_repo": "HazyResearch/ncm",
-    "upstream_sha": "c70274273f489abc73832b2b98584a8483b6b203",
-    "patch": "patches/device-support.patch (same 7-site patch as CPU runs)",
-    "runbook": "scripts/as-run/epyc_runbook.sh"
-  },
-  "runs": {
-    "sudoku_hard_full_v100": {
-      "n": 2000,
-      "of_total": 2000,
-      "batch_size": 128,
-      "wall_s_incl_load": 26.026,
-      "solved_pct": 86.3,
-      "solved": "1726/2000",
-      "cell_pct": 98.35,
-      "valid_pct": 86.3,
-      "paper_full_test_solved_pct": 86.1,
-      "delta_pp": 0.2,
-      "verdict": "exact-configuration reproduction"
+    "machine": {
+        "host": "EPYC (Ubuntu, Tailscale SSH)",
+        "gpu": "Tesla V100-SXM2-16GB (index 0, CUDA_VISIBLE_DEVICES=0)",
+        "device": "cuda fp32",
+        "sharing": "dedicated GPU (clean VRAM, zero co-tenant allocator warnings)",
+        "gpu_isolation": {
+            "method": "stopped ollama-default.service (2 llama-server procs, ~12GB) before the run; CUDA_VISIBLE_DEVICES=0; verified 5 MiB resident before start",
+            "vram_before_mb": 5,
+            "vram_peak_mb": 12794,
+            "co_tenant_warnings": 0
+        }
     },
-    "xsum_v100_bs32_n1000": {
-      "n": 1000,
-      "of_total": 11334,
-      "batch_size": 32,
-      "wall_s_incl_load": 103.39,
-      "rouge1": 34.63,
-      "rouge2": 12.84,
-      "rougeL": 27.78,
-      "avg_words": 20.9,
-      "paper_full_test": {"rouge1": 35.0, "rouge2": 12.8, "rougeL": 28.0}
+    "software": {
+        "torch": "cu126 latest (uv venv python 3.12)",
+        "upstream_repo": "HazyResearch/ncm",
+        "upstream_sha": "c70274273f489abc73832b2b98584a8483b6b203",
+        "patch": "patches/device-support.patch (same 7-site patch as CPU runs)",
+        "runbook": "scripts/as-run/epyc_runbook.sh"
     },
-    "xsum_v100_bs32_n160": {
-      "n": 160,
-      "batch_size": 32,
-      "wall_s_incl_load": 22.602,
-      "rouge1": 34.14, "rouge2": 12.06, "rougeL": 27.06, "avg_words": 21.0
-    },
-    "latency_v100": {
-      "marginal_s_per_doc_bs1": 0.1133,
-      "bs1_pairs_s": {"n8": 9.649, "n40": 13.274},
-      "marginal_s_per_doc_bs32": 0.0962,
-      "bs32_pairs_s": {"n160": 22.602, "n1000": 103.39},
-      "throughput_docs_per_s_bs32": 10.4,
-      "gpu_load_s_first_run": 8.74,
-      "speedup_vs_hx370_cpu_seq": 20.6,
-      "speedup_vs_hx370_cpu_throughput": 24.8,
-      "batching_gain_gpu_pct": 15.1,
-      "note": "bs32 figures degraded by co-tenant allocator pressure; lower bounds. Batching gain on GPU small too - NFE-bounded, not batch-bound."
+    "runs": {
+        "sudoku_hard_full_v100": {
+            "n": 2000,
+            "of_total": 2000,
+            "batch_size": 128,
+            "wall_s_incl_load": 26.026,
+            "solved_pct": 86.3,
+            "solved": "1726/2000",
+            "cell_pct": 98.35,
+            "valid_pct": 86.3,
+            "paper_full_test_solved_pct": 86.1,
+            "delta_pp": 0.2,
+            "verdict": "exact-configuration reproduction (clean GPU)"
+        },
+        "xsum_v100_bs32_n1000": {
+            "n": 1000,
+            "of_total": 11334,
+            "batch_size": 32,
+            "wall_s_incl_load": 105.576,
+            "rouge1": 34.63,
+            "rouge2": 12.84,
+            "rougeL": 27.78,
+            "avg_words": 20.9,
+            "paper_full_test": {
+                "rouge1": 35.0,
+                "rouge2": 12.8,
+                "rougeL": 28.0
+            }
+        },
+        "xsum_v100_bs32_n160": {
+            "n": 160,
+            "batch_size": 32,
+            "wall_s_incl_load": 23.75,
+            "rouge1": 34.14,
+            "rouge2": 12.06,
+            "rougeL": 27.06,
+            "avg_words": 21.0
+        },
+        "latency_v100": {
+            "marginal_s_per_doc_bs1": 0.1073,
+            "bs1_pairs_s": {
+                "n8": 9.728,
+                "n40": 13.162
+            },
+            "marginal_s_per_doc_bs32": 0.0974,
+            "bs32_pairs_s": {
+                "n160": 23.75,
+                "n1000": 105.576
+            },
+            "throughput_docs_s_bs32": 9.47,
+            "full_census_throughput_docs_s_bs32": 9.13,
+            "note": "marginal computed as (t_high - t_low)/(n_high - t_low) across the two bs=1 and two bs=32 pairs; load time cancels. Clean-V100 vs prior co-tenant run: bs1 0.1133->0.1073, bs32 0.0962->0.0974 (within noise); quality unchanged."
+        },
+        "xsum_v100_full_11334": {
+            "n": 11334,
+            "of_total": 11334,
+            "batch_size": 32,
+            "wall_s_incl_load": 1241.0,
+            "rouge1": 34.92,
+            "rouge2": 12.71,
+            "rougeL": 27.93,
+            "avg_words": 20.7,
+            "paper_full_test": {
+                "rouge1": 35.0,
+                "rouge2": 12.8,
+                "rougeL": 28.0
+            },
+            "delta_pp": {
+                "rouge1": -0.08,
+                "rouge2": -0.09,
+                "rougeL": -0.07
+            },
+            "verdict": "full-test-set reproduction on dedicated V100; within 0.1 pp of paper"
+        }
     }
-  }
 }
