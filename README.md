@@ -28,8 +28,8 @@ in `results/`.
 | **CPU INT8 dynamic quantization** | -- | **2.19 s/doc** marginal (vs 2.89 s fp32), **1.32x speedup**, 27.4 docs/min sustained | Zero-retraining CPU acceleration |
 | CPU summary latency | -- | **2.34 s/doc** marginal (bs=1), ~5.7 s cold load, 25 docs/min sustained | "Sub-second local" does NOT hold on a laptop CPU; 2.3 s does |
 | **Batching on CPU** | -- | bs=8 saves **-1.9%** vs bs=1 (i.e. nothing) | Null result, reported honestly: fp32 GEMMs already saturate 16 cores at bs=1 |
-| **XSum FP32 vs INT8 parity (`n=32`, CPU `bs=8`)** | -- | **FP32 27.89** (`55.93s`) vs **INT8 27.65 R-L** (`33.26s`, **1.68x**) | Only **-0.24 pp R-L** loss via zero-pickle `.safetensors` |
-| **Sudoku hard Best-of-4 + Repair (`n=100`, CPU)** | -- | Greedy `84.0%` -> Repair `86.0%` -> **Best-of-4 + Repair `89.0%`** (`22.98s`) | **+5.0 pp** win using Best-of-4 sampling + cell constraint repair |
+| **XSum FP32 vs INT8 parity (`n=32`, CPU `bs=8`)** | -- | **FP32 27.89** (`55.93s`) vs **INT8 27.65 R-L** (`33.26s`, **1.68x**) | Only **-0.24 pp R-L** loss via SHA-256 verified `.safetensors` |
+| **Sudoku hard Best-of-4 + Repair (`n=100`, CPU)** | -- | Greedy `84.0%` -> Repair `86.0%` -> **Best-of-4 + Bounded Repair `91.0%`** (`26.46s`) | **+7.0 pp** win (`84 -> 91/100`, cell `98.47%`) |
 | **Sudoku hard — FULL 2000 boards (V100)** | 86.1% solved / full test | **86.30%** (1726/2000), cell 98.35%, 26.0 s wall incl. load, bs=128 | **Exact-configuration reproduction: +0.2 pp** |
 | **XSum — FULL 11,334-doc census (V100, bs=32)** | 35.0 / 12.8 / 28.0 full test | **34.92 / 12.71 / 27.93** (20.7 avg words, 1,241 s wall, 9.13 docs/s) | **Exact full-corpus reproduction: -0.07 pp R-L** |
 | GPU summary latency (dedicated V100) | -- | **0.1073 s/doc** sequential (bs=1), **0.0974 s/doc** marginal (bs=32) = **9.47 docs/s** | 22x faster than this box's CPU on 2018 silicon |

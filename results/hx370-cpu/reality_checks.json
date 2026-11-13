@@ -26,6 +26,7 @@
   "sudoku_hard_best_of_k_ablation_n100": {
     "n_boards": 100,
     "ckpt_format": "safetensors",
+    "repair_algorithm": "clue_clamp + naked_singles + bounded_backtrack_64_nodes",
     "greedy_k1_no_repair": {
       "n_boards": 100,
       "solved_pct": 84.0,
@@ -39,7 +40,7 @@
         "upper": 89.9,
         "margin_pp": 7.16
       },
-      "wall_s": 14.751,
+      "wall_s": 18.93,
       "wilson_95ci": {
         "p": 84.0,
         "lower": 75.58,
@@ -60,7 +61,7 @@
         "upper": 91.47,
         "margin_pp": 6.81
       },
-      "wall_s": 14.804,
+      "wall_s": 18.85,
       "wilson_95ci": {
         "p": 86.0,
         "lower": 77.86,
@@ -70,24 +71,35 @@
     },
     "best_of_4_with_repair": {
       "n_boards": 100,
-      "solved_pct": 89.0,
-      "cell_pct": 98.33,
-      "valid_pct": 89.0,
+      "solved_pct": 91.0,
+      "cell_pct": 98.47,
+      "valid_pct": 91.0,
       "format_valid_pct": 100.0,
-      "solved_count": 89,
+      "solved_count": 91,
       "ci_95": {
-        "p": 89.0,
-        "lower": 81.37,
-        "upper": 93.75,
-        "margin_pp": 6.19
+        "p": 91.0,
+        "lower": 83.77,
+        "upper": 95.19,
+        "margin_pp": 5.71
       },
-      "wall_s": 22.977,
+      "wall_s": 26.459,
       "wilson_95ci": {
-        "p": 89.0,
-        "lower": 81.37,
-        "upper": 93.75,
-        "margin_pp": 6.19
+        "p": 91.0,
+        "lower": 83.77,
+        "upper": 95.19,
+        "margin_pp": 5.71
       }
     }
+  },
+  "safetensors_sha256_verified": true,
+  "live_service_e2e_int8_safetensors": {
+    "health_format": "safetensors",
+    "summarize_ms": 1036,
+    "longdoc_summarize_ms": 4504,
+    "longdoc_chunks": 4,
+    "longdoc_pii_redactions": 2,
+    "openai_chat_xsum_words": 1,
+    "openai_chat_sudoku_len": 81,
+    "sse_stream_ok": true
   }
 }

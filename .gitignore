@@ -12,3 +12,8 @@ results/**/*.pkl
 results/**/*.pickle
 *.pickle
 *.log
+*.pt
+*.safetensors
+.coverage*
+.pytest_cache/
+.ruff_cache/
