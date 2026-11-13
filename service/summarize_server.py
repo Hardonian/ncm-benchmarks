@@ -48,6 +48,13 @@ from ncm_bench.progressive import progressive_decode, render_progressive_html  #
 
 ensure_offline_env()
 
+try:
+    from opentelemetry import trace as _otel_trace
+
+    _TRACER = _otel_trace.get_tracer("ncm-benchmarks")
+except ImportError:  # pragma: no cover
+    _TRACER = None
+
 LATENCY_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)
 
 
@@ -112,6 +119,16 @@ class OpenAIChatRequest(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
 
 
+class LongDocRequest(SummarizeRequest):
+    max_chunk_chars: int = Field(default=1600, ge=256, le=8000)
+    overlap_chars: int = Field(default=160, ge=0, le=1000)
+    use_mbr: bool = False
+    num_candidates: int = Field(default=4, ge=1, le=16)
+    redact_pii: bool = False
+    restore_pii: bool = False
+    audit_receipt: bool = False
+
+
 CKPT: dict[str, Any] | None = None
 
 
@@ -125,12 +142,14 @@ def load(
     """Backwards-compatible loader used by legacy scripts."""
     del cfg_root
     ck_path = Path(ck).resolve()
-    artifacts_root = ck_path.parent
-    try:
-        rel_task = ck_path.relative_to(artifacts_root).as_posix()
-    except ValueError:
+    parts = ck_path.parts
+    if "artifacts" in parts:
+        idx = len(parts) - 1 - parts[::-1].index("artifacts")
+        home = Path(*parts[:idx])
+        rel_task = "/".join(parts[idx + 1 :]) or "xsum"
+    else:
+        home = REPO_ROOT
         rel_task = "xsum"
-    home = artifacts_root.parent if artifacts_root.name == "artifacts" else REPO_ROOT
     return load_bundle(
         task=rel_task,
         device=device,
@@ -210,7 +229,7 @@ def create_app(
     app = fastapi.FastAPI(
         title="Next-Concept Modeling Sovereign Service",
         description="Local-first coarse-to-fine concept generation, MBR, and Sudoku microservice",
-        version="2.2.0",
+        version="2.0.0",
         lifespan=lifespan,
     )
 
@@ -237,7 +256,7 @@ def create_app(
     def require_auth(authorization: str | None = Header(default=None)) -> None:
         if not configured_key:
             return
-        if not authorization or not authorization.startswith("Bearer "):
+        if not authorization or not authorization[:7].lower() == "bearer ":
             raise fastapi.HTTPException(status_code=401, detail="Missing Bearer token")
         token = authorization[7:].strip()
         if not hmac.compare_digest(token.encode("utf-8"), configured_key.encode("utf-8")):
@@ -264,7 +283,11 @@ def create_app(
         def _exec():
             t0 = time.perf_counter()
             with model_lock:
-                res = fn(active_bundle)
+                if _TRACER is not None:
+                    with _TRACER.start_as_current_span(f"ncm.inference.{target_key}"):
+                        res = fn(active_bundle)
+                else:
+                    res = fn(active_bundle)
             return res, time.perf_counter() - t0
 
         _inc_metric("active_inferences", 1)
@@ -410,7 +433,14 @@ def create_app(
     @app.post("/v1/chat/completions", dependencies=[Depends(require_auth)])
     async def openai_chat_completions(req: OpenAIChatRequest):
         prompt = req.messages[-1].content
-        summary, latency_ms = await _run_serialized(lambda b: summarize_texts(b, [prompt])[0])
+        if "sudoku" in req.model.lower():
+            res, latency_ms = await _run_serialized(
+                lambda b: solve_sudoku(b, [prompt], best_of_k=4, repair=True)[0],
+                target_key="sudoku_bundle",
+            )
+            content = res["board"]
+        else:
+            content, latency_ms = await _run_serialized(lambda b: summarize_texts(b, [prompt])[0])
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
             "object": "chat.completion",
@@ -419,17 +449,62 @@ def create_app(
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": summary},
+                    "message": {"role": "assistant", "content": content},
                     "finish_reason": "stop",
                 }
             ],
             "usage": {
                 "prompt_tokens": len(prompt.split()),
-                "completion_tokens": len(summary.split()),
-                "total_tokens": len(prompt.split()) + len(summary.split()),
+                "completion_tokens": len(content.split()),
+                "total_tokens": len(prompt.split()) + len(content.split()),
             },
             "ncm_latency_ms": latency_ms,
         }
+
+    @app.post("/longdoc_summarize", dependencies=[Depends(require_auth)])
+    async def longdoc_summarize_endpoint(req: LongDocRequest):
+        from ncm_bench.longdoc import (
+            build_audit_receipt,
+            redact_pii,
+            restore_pii,
+            summarize_long_document,
+        )
+
+        pii_map: dict[str, str] = {}
+        proc_text = req.text
+        if req.redact_pii:
+            proc_text, pii_map = redact_pii(req.text)
+
+        res, latency_ms = await _run_serialized(
+            lambda b: summarize_long_document(
+                b,
+                proc_text,
+                max_chunk_chars=req.max_chunk_chars,
+                overlap_chars=req.overlap_chars,
+                use_mbr=req.use_mbr,
+                num_candidates=req.num_candidates,
+            )
+        )
+        summary = res["summary"]
+        if req.restore_pii and pii_map:
+            summary = restore_pii(summary, pii_map)
+
+        payload: dict[str, Any] = {
+            "summary": summary,
+            "num_chunks": res["num_chunks"],
+            "pii_redactions": len(pii_map),
+            "latency_ms": latency_ms,
+        }
+        if req.audit_receipt:
+            active_bundle = state["bundle"] or {}
+            payload["audit_receipt"] = build_audit_receipt(
+                req.text,
+                summary,
+                active_bundle,
+                pii_redactions=len(pii_map),
+                mode="longdoc-mbr" if req.use_mbr else "longdoc",
+            )
+        return payload
 
     @app.post("/summarize", dependencies=[Depends(require_auth)])
     async def summarize_endpoint(req: SummarizeRequest):

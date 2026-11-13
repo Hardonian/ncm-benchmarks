@@ -2,7 +2,7 @@ replicaCount: 2
 
 image:
   repository: hardonian/ncm-sovereign-summarizer
-  tag: "2.2.0"
+  tag: "2.0.0"
   pullPolicy: IfNotPresent
 
 service:

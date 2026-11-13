@@ -165,7 +165,12 @@ def export_safetensors(
     save_file(tok_tensors, str(tok_out))
     save_file(gen_tensors, str(gen_out))
 
-    meta: dict[str, Any] = {}
+    meta: dict[str, Any] = {
+        "sha256": {
+            "tokenizer.safetensors": sha256_file(tok_out),
+            "generator.safetensors": sha256_file(gen_out),
+        }
+    }
     if "inference" in gen_raw and "token_unigram" in gen_raw["inference"]:
         meta["token_unigram"] = gen_raw["inference"]["token_unigram"].detach().cpu().tolist()
     meta_out.write_text(json.dumps(meta), encoding="utf-8")
@@ -229,6 +234,20 @@ def load_bundle(
             verify_file_integrity(gen_pt, home, strict=strict_checksums)
 
     if use_safetensors:
+        meta = json.loads(meta_json.read_text(encoding="utf-8"))
+        if verify_checksums:
+            expected_meta_hashes = meta.get("sha256", {})
+            for st_path in (tok_st, gen_st):
+                if st_path.name in expected_meta_hashes:
+                    actual_st = sha256_file(st_path)
+                    if actual_st != expected_meta_hashes[st_path.name]:
+                        raise RuntimeError(
+                            f"Safetensors integrity verification failed for {st_path.name}: "
+                            f"expected {expected_meta_hashes[st_path.name]}, got {actual_st}"
+                        )
+                else:
+                    verify_file_integrity(st_path, home, strict=strict_checksums)
+
         PreTok = hydra.utils.get_class(ncm_tokenizers[cfg.tokenizer.pre_tokenizer.name])
         pre_tok = PreTok.from_config(cfg.tokenizer.pre_tokenizer)
         vqvae = VQVAE(**cfg.tokenizer.vqvae)
@@ -236,6 +255,7 @@ def load_bundle(
         tk = VQVAETokenizer(pre_tok, vqvae)
         ckpt_format = "safetensors"
     else:
+        meta = {}
         cfg.tokenizer.vqvae.checkpoint_path = str(tok_pt)
         tk = VQVAETokenizer.from_config(cfg.tokenizer)
         ckpt_format = "pt"
@@ -248,7 +268,6 @@ def load_bundle(
 
     if use_safetensors:
         gen_sd = st_load_file(str(gen_st), device=str(target_device))
-        meta = json.loads(meta_json.read_text(encoding="utf-8"))
         token_unigram = (
             torch.tensor(meta["token_unigram"], dtype=torch.float32, device=target_device)
             if "token_unigram" in meta
@@ -497,6 +516,37 @@ def repair_sudoku_board(clue_digits: str, pred_digits: str) -> str:
                 changed = True
         if not changed:
             break
+
+    # 3) Bounded deterministic search (<= 12 remaining cells, <= 64 nodes) preserves clue guarantees
+    empties = [i for i in range(81) if grid[i] == "0"]
+    if 0 < len(empties) <= 12:
+        nodes = [0]
+
+        def _backtrack() -> bool:
+            if nodes[0] >= 64:
+                return False
+            nodes[0] += 1
+            best_idx = -1
+            best_cands: list[str] = []
+            for idx in empties:
+                if grid[idx] != "0":
+                    continue
+                used = {grid[p] for p in _peers(idx) if grid[p] in digits}
+                cands = sorted(digits - used)
+                if not cands:
+                    return False
+                if best_idx == -1 or len(cands) < len(best_cands):
+                    best_idx, best_cands = idx, cands
+            if best_idx == -1:
+                return True
+            for d in best_cands:
+                grid[best_idx] = d
+                if _backtrack():
+                    return True
+                grid[best_idx] = "0"
+            return False
+
+        _backtrack()
 
     return "".join(grid)
 

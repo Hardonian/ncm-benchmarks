@@ -54,5 +54,5 @@ EXPOSE 8031
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8031/ready || exit 1
 
-ENTRYPOINT ["sh", "-c", "ncm-bench verify && exec python service/summarize_server.py \"$@\"", "--"]
+ENTRYPOINT ["sh", "-c", "ncm-bench verify --artifacts-only && exec python service/summarize_server.py \"$@\"", "--"]
 CMD ["--host", "0.0.0.0", "--port", "8031", "--quantize", "int8"]

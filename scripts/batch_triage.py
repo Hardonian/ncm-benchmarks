@@ -40,8 +40,11 @@ def main():
     parser.add_argument("--input", "-i", required=True, help="Input JSONL file containing documents ('text' field)")
     parser.add_argument("--output", "-o", default="triage_results.jsonl", help="Output JSONL destination")
     parser.add_argument("--errors-out", default="triage_errors.jsonl", help="Dead-letter JSONL for failed documents")
-    parser.add_argument("--mode", choices=["standard", "mbr"], default="standard", help="Generation mode")
+    parser.add_argument("--mode", choices=["standard", "mbr", "longdoc"], default="standard", help="Generation mode")
     parser.add_argument("--candidates", type=int, default=4, help="MBR candidate count")
+    parser.add_argument("--redact-pii", action="store_true", help="Scrub PII during longdoc triage")
+    parser.add_argument("--restore-pii", action="store_true", help="Restore PII placeholders in output")
+    parser.add_argument("--audit-receipt", action="store_true", help="Include SHA-256 compliance receipts in longdoc mode")
     parser.add_argument("--endpoint", default="http://127.0.0.1:8031", help="NCM service endpoint")
     parser.add_argument("--api-key", default=os.environ.get("NCM_API_KEY"), help="Optional Bearer API key")
     parser.add_argument("--resume", action="store_true", help="Resume from existing output JSONL without duplicating IDs")
@@ -120,6 +123,14 @@ def main():
             try:
                 if args.mode == "mbr":
                     res = client.mbr_summarize(text, num_candidates=args.candidates)
+                elif args.mode == "longdoc":
+                    res = client.longdoc_summarize(
+                        text,
+                        num_candidates=args.candidates,
+                        redact_pii=args.redact_pii,
+                        restore_pii=args.restore_pii,
+                        audit_receipt=args.audit_receipt,
+                    )
                 else:
                     res = client.summarize(text)
             except NCMClientError as exc:
@@ -140,6 +151,8 @@ def main():
             }
             if "selected_index" in res:
                 record["mbr_selected_idx"] = res["selected_index"]
+            if "audit_receipt" in res:
+                record["audit_receipt"] = res["audit_receipt"]
             out_f.write(json.dumps(record) + "\n")
             out_f.flush()
 

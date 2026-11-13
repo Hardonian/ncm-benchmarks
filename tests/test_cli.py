@@ -16,6 +16,22 @@ def test_cli_verify():
             assert exc.value.code == 1
 
 
+def test_cli_verify_artifacts_only_skips_unmounted_data(tmp_path):
+    art = tmp_path / "artifacts" / "xsum" / "config.yaml"
+    art.parent.mkdir(parents=True)
+    art.write_text("cfg: 1\n", encoding="utf-8")
+    import hashlib
+
+    h = hashlib.sha256(art.read_bytes()).hexdigest()
+    sums = {"artifacts/xsum/config.yaml": h, "data/xsum/passages.pickle": "deadbeef"}
+    with (
+        patch("ncm_bench.cli.ROOT_DIR", tmp_path),
+        patch("scripts.fetch_artifacts.load_checksums", return_value=sums),
+        patch.object(sys, "argv", ["ncm-bench", "verify", "--artifacts-only"]),
+    ):
+        main()
+
+
 def test_cli_summarize_mocked(capsys):
     with patch("ncm_bench.cli.get_model_bundle") as mock_bundle:
         mock_bundle.return_value = {"mock": True}

@@ -120,3 +120,7 @@ def test_client_sudoku_batch_mbr_and_chat():
         res_chat = client.chat_completions("Hello")
         assert res_chat["choices"][0]["message"]["content"] == "Hi"
 
+        mock_resp.json.return_value = {"summary": "Long doc summary", "num_chunks": 3, "pii_redactions": 1}
+        res_ld = client.longdoc_summarize("A" * 3000, redact_pii=True, restore_pii=True, audit_receipt=True)
+        assert res_ld["num_chunks"] == 3
+

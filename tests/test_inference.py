@@ -156,9 +156,26 @@ def test_repair_sudoku_board_fixes_single_missing_cell_and_preserves_clues():
     assert repaired == valid_81
     assert is_valid_sudoku_board(repaired)
 
+    # Test multi-cell ambiguity (>2 missing cells) via bounded backtracking
+    multi_clue = "000" + valid_81[3:]
+    multi_pred = "999" + valid_81[3:]
+    repaired_multi = repair_sudoku_board(multi_clue, multi_pred)
+    assert repaired_multi == valid_81
+    assert is_valid_sudoku_board(repaired_multi)
+
     with patch("ncm_bench.inference.summarize_texts", return_value=[corrupted_pred]):
         res = solve_sudoku({"device": "cpu"}, [clue], best_of_k=2, repair=True)
         assert len(res) == 1
         assert res[0]["valid"] is True
         assert res[0]["cells"] == valid_81
+
+
+def test_resolve_device_and_dtype_and_nested_load():
+    from ncm_bench.inference import resolve_device, resolve_dtype
+
+    assert resolve_device("cpu") == "cpu"
+    assert resolve_dtype("fp32", "cpu") == torch.float32
+    assert resolve_dtype("bf16", "cpu") == torch.bfloat16
+    assert resolve_dtype("fp16", "cpu") == torch.float32
+
 

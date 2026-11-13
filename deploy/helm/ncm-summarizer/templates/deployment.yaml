@@ -22,6 +22,15 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 8031
+          env:
+            - name: NCM_DEVICE
+              value: {{ .Values.env.NCM_DEVICE | quote }}
+            - name: OMP_NUM_THREADS
+              value: {{ .Values.env.OMP_NUM_THREADS | quote }}
+            - name: NCM_STRICT_CHECKSUMS
+              value: {{ .Values.env.NCM_STRICT_CHECKSUMS | quote }}
+            - name: NCM_STRICT_AUTH
+              value: {{ .Values.env.NCM_STRICT_AUTH | quote }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -44,8 +53,19 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: artifacts
+              mountPath: /app/artifacts
+              readOnly: true
+            - name: hf-home
+              mountPath: /app/hf-home
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
-
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-artifacts
+        - name: hf-home
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-hf-home

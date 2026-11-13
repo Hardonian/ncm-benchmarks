@@ -2,7 +2,7 @@
 
 All notable changes to `ncm-benchmarks` are documented in this file.
 
-## [0.2.0] - 2026-11-12
+## [2.0.0] - 2026-11-12
 
 ### Added
 - **Zero-Pickle Safetensors Support (`ncm_bench/inference.py`, `ncm-bench convert-safetensors`)**: Added `export_safetensors()` and preference for `.safetensors` + `inference_meta.json` inside `load_bundle()`, eliminating runtime pickle deserialization once converted. Verified on both `xsum` and `sudoku/hard` checkpoints.

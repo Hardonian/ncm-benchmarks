@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hardonian/ncm-sovereign-summarizer:2.2.0
+    image: hardonian/ncm-sovereign-summarizer:2.0.0
     container_name: ncm-summarizer
     restart: unless-stopped
     ports:

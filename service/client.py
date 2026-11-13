@@ -131,6 +131,33 @@ class NCMClient:
             },
         )
 
+    def longdoc_summarize(
+        self,
+        text: str,
+        max_chunk_chars: int = 1600,
+        overlap_chars: int = 160,
+        use_mbr: bool = False,
+        num_candidates: int = 4,
+        redact_pii: bool = False,
+        restore_pii: bool = False,
+        audit_receipt: bool = False,
+    ) -> dict[str, Any]:
+        """Summarizes multi-page documents via POST /longdoc_summarize with optional PII & audit receipt."""
+        return self._request(
+            "POST",
+            "/longdoc_summarize",
+            json={
+                "text": text,
+                "max_chunk_chars": max_chunk_chars,
+                "overlap_chars": overlap_chars,
+                "use_mbr": use_mbr,
+                "num_candidates": num_candidates,
+                "redact_pii": redact_pii,
+                "restore_pii": restore_pii,
+                "audit_receipt": audit_receipt,
+            },
+        )
+
     def sudoku(
         self,
         puzzle: str,

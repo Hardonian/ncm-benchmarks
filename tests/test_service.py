@@ -167,6 +167,10 @@ def test_sudoku_openai_batch_mbr_and_progressive_stream() -> None:
             side_effect=lambda b, texts, **kw: [f"Sum:{t}" for t in texts],
         ),
         patch(
+            "ncm_bench.longdoc.summarize_texts",
+            side_effect=lambda b, texts, **kw: [f"LongSum:{t[:25]}" for t in texts],
+        ),
+        patch(
             "service.summarize_server.generate_mbr_summary",
             side_effect=lambda b, text, **kw: {"summary": f"MBR:{text}", "selected_index": 0, "num_candidates": 2},
         ),
@@ -195,6 +199,29 @@ def test_sudoku_openai_batch_mbr_and_progressive_stream() -> None:
             chat_data = chat_resp.json()
             assert chat_data["object"] == "chat.completion"
             assert chat_data["choices"][0]["message"]["content"] == "Sum:Hello world"
+
+            sudoku_chat = client.post(
+                "/v1/chat/completions",
+                json={"model": "ncm-sudoku-25M", "messages": [{"role": "user", "content": puzzle}]},
+            )
+            assert sudoku_chat.status_code == 200
+            assert sudoku_chat.json()["choices"][0]["message"]["content"] == "5" * 81
+
+            longdoc_resp = client.post(
+                "/longdoc_summarize",
+                json={
+                    "text": ("Contact alice@example.com for Q3 earnings in London. " * 40),
+                    "max_chunk_chars": 400,
+                    "redact_pii": True,
+                    "restore_pii": True,
+                    "audit_receipt": True,
+                },
+            )
+            assert longdoc_resp.status_code == 200
+            ldata = longdoc_resp.json()
+            assert ldata["num_chunks"] >= 2
+            assert ldata["pii_redactions"] >= 1
+            assert "audit_receipt" in ldata
 
             batch_resp = client.post(
                 "/batch_mbr_summarize",

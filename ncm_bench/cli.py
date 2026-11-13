@@ -84,6 +84,8 @@ def cmd_serve(args):
         argv.extend(["--device", args.device])
     if args.uds:
         argv.extend(["--uds", args.uds])
+    if getattr(args, "with_sudoku", False):
+        argv.append("--with-sudoku")
     if args.skip_checksum:
         argv.append("--skip-checksum")
     if args.strict_checksums:
@@ -173,6 +175,7 @@ def cmd_mbr(args):
         verify_checksums=not args.skip_checksum,
         strict_checksums=args.strict_checksums,
         dtype=args.dtype,
+        compile_model=args.compile,
     )
     from ncm_bench.mbr import generate_mbr_summary
 
@@ -215,6 +218,7 @@ def cmd_inspect(args):
         verify_checksums=not args.skip_checksum,
         strict_checksums=args.strict_checksums,
         dtype=args.dtype,
+        compile_model=args.compile,
     )
     from ncm_bench.progressive import progressive_decode, render_progressive_html
 
@@ -223,11 +227,12 @@ def cmd_inspect(args):
     if args.html:
         html_doc = render_progressive_html(res, prompt_text=text)
         out_path = Path(args.html)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(html_doc, encoding="utf-8")
         print(f"[ncm-bench] Wrote interactive visualizer to {out_path.resolve()}", file=sys.stderr)
-    elif args.json:
+    if args.json:
         _emit_output(json.dumps(res, indent=2), args)
-    else:
+    elif not args.html:
         print("=" * 70)
         print("HIERARCHICAL COARSE-TO-FINE PROGRESSION (Levels 0 -> 8)")
         print("=" * 70)
@@ -252,6 +257,7 @@ def cmd_sudoku(args):
         verify_checksums=not args.skip_checksum,
         strict_checksums=args.strict_checksums,
         dtype=args.dtype,
+        compile_model=args.compile,
     )
     repair = not args.no_repair
     if args.puzzle:
@@ -330,6 +336,7 @@ def cmd_translate(args):
         verify_checksums=not args.skip_checksum,
         strict_checksums=args.strict_checksums,
         dtype=args.dtype,
+        compile_model=args.compile,
     )
     from ncm_bench.inference import summarize_texts
 
@@ -488,14 +495,19 @@ def cmd_train_smoke(args):
 def cmd_verify(args):
     from scripts.fetch_artifacts import load_checksums, sha256_file
 
-    del args
+    artifacts_only = bool(getattr(args, "artifacts_only", False))
     sums = load_checksums()
     if not sums:
         print("Error: SHA256SUMS file not found or empty.", file=sys.stderr)
         sys.exit(1)
+    entries = (
+        {k: v for k, v in sums.items() if k.startswith("artifacts/")}
+        if artifacts_only
+        else sums
+    )
     all_ok = True
-    print(f"Verifying {len(sums)} artifact checksums...")
-    for rel_path, exp_hash in sums.items():
+    print(f"Verifying {len(entries)} artifact checksums...")
+    for rel_path, exp_hash in entries.items():
         p = ROOT_DIR / rel_path
         if not p.exists():
             print(f"  [MISSING] {rel_path}")
@@ -542,6 +554,7 @@ def main():
     p_serve.add_argument("--request-timeout-s", type=float, default=60.0)
     p_serve.add_argument("--max-body-bytes", type=int, default=2_000_000)
     p_serve.add_argument("--rate-limit-rpm", type=int, default=0, help="Requests/min per client IP (0=disabled)")
+    p_serve.add_argument("--with-sudoku", action="store_true", help="Also load sudoku/hard model for POST /sudoku")
     _add_common_flags(p_serve, with_io=False)
     p_serve.set_defaults(func=cmd_serve)
 
@@ -622,6 +635,11 @@ def main():
 
     # verify
     p_ver = sub.add_parser("verify", help="Verify model and data SHA256 checksums")
+    p_ver.add_argument(
+        "--artifacts-only",
+        action="store_true",
+        help="Verify pinned model weights under artifacts/ only (skip optional data/ datasets)",
+    )
     p_ver.set_defaults(func=cmd_verify)
 
     args = parser.parse_args()
