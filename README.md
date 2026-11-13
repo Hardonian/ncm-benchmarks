@@ -1,6 +1,8 @@
 # NCM Local Benchmarks
 
 [![CI](https://github.com/Hardonian/ncm-benchmarks/actions/workflows/ci.yml/badge.svg)](https://github.com/Hardonian/ncm-benchmarks/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/ncm-benchmarks.svg)](https://pypi.org/project/ncm-benchmarks/)
+[![Python](https://img.shields.io/pypi/pyversions/ncm-benchmarks.svg)](https://pypi.org/project/ncm-benchmarks/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v2.0.0-green.svg)](https://github.com/Hardonian/ncm-benchmarks/releases)
 
@@ -91,6 +93,28 @@ LM1B, XSum, WMT14 and Sudoku while using 4-5x fewer training tokens.
 4. **The 2-size timing trick**: model load (~6 s) contaminates single-shot latency.
    Run n=4 and n=16 at the same batch size; marginal per-item =
    (T16-T4)/12, load = T4-4*marginal. Our runners do this for you.
+
+## Installation & Quickstart
+
+Install the official package directly from PyPI:
+
+```bash
+pip install ncm-benchmarks
+```
+
+Or install from source with development tools:
+
+```bash
+git clone https://github.com/Hardonian/ncm-benchmarks.git
+cd ncm-benchmarks
+pip install -e ".[dev]"
+```
+
+Verify your installation:
+
+```bash
+ncm-bench --help
+```
 
 ## Reproduce
 
