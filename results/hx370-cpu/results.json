@@ -1,9 +1,10 @@
 {
   "machine": {
     "host": "AMD Ryzen AI 9 HX 370",
-    "cpu": "Ryzen AI 9 HX 370 (12 cores / 24 threads)",
-    "ram": "32 GiB unified LPDDR5X",
-    "device": "cpu fp32 & int8 dynamic"
+    "cpu": "Ryzen AI 9 HX 370 (chip spec 12c/24t; WSL observed nproc=16)",
+    "ram": "32 GiB LPDDR5X (chip spec; WSL MemTotal observed 19 GiB)",
+    "device": "cpu fp32 & int8 dynamic",
+    "notes": "chip spec quoted from AMD; nproc/free measured 2026-11-11 in WSL"
   },
   "software": {
     "torch": "2.15.0+cpu",
