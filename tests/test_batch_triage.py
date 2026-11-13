@@ -26,3 +26,4 @@ def test_load_completed_ids_handles_valid_and_corrupt_lines(tmp_path: Path):
 
 def test_load_completed_ids_missing_file(tmp_path: Path):
     assert load_completed_ids(tmp_path / "does_not_exist.jsonl") == set()
+
