@@ -14,7 +14,6 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    environment: pypl
     steps:
       - uses: actions/checkout@v4
 
