@@ -72,6 +72,26 @@ TASK_SPECS: dict[str, dict[str, list[str]]] = {
         "data": [],
         "tokenizers": ["bert-base-uncased"],
     },
+    "cnn_dailymail": {
+        "ckpts": ["cnn_dailymail/config.yaml", "cnn_dailymail/generator.pt", "cnn_dailymail/tokenizer.pt"],
+        "data": ["cnn_dailymail/passages.pickle", "cnn_dailymail/reference_summaries.pickle"],
+        "tokenizers": ["gpt2"],
+    },
+    "squad": {
+        "ckpts": ["squad/config.yaml", "squad/generator.pt", "squad/tokenizer.pt"],
+        "data": ["squad/questions.pickle", "squad/contexts.pickle", "squad/answers.pickle"],
+        "tokenizers": ["gpt2"],
+    },
+    "gsm8k": {
+        "ckpts": ["gsm8k/config.yaml", "gsm8k/generator.pt", "gsm8k/tokenizer.pt"],
+        "data": ["gsm8k/questions.pickle", "gsm8k/answers.pickle"],
+        "tokenizers": ["gpt2"],
+    },
+    "humaneval": {
+        "ckpts": ["humaneval/config.yaml", "humaneval/generator.pt", "humaneval/tokenizer.pt"],
+        "data": ["humaneval/problems.pickle", "humaneval/solutions.pickle"],
+        "tokenizers": ["gpt2"],
+    },
 }
 
 # Preserve module-level lists for backward compatibility
@@ -109,7 +129,7 @@ def main():
         nargs="+",
         default=["xsum", "sudoku/hard"],
         choices=sorted(TASK_SPECS.keys()),
-        help="Tasks to fetch (default: xsum sudoku/hard)",
+        help="Tasks to fetch (default: xsum sudoku/hard; extended: wmt14 sudoku/easy sudoku/medium lm1b/small cnn_dailymail squad gsm8k humaneval)",
     )
     args = parser.parse_args()
 
