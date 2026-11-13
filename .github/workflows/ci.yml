@@ -26,7 +26,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
-          pip install safetensors pypdf pytest pytest-cov httpx ruff bandit
+          pip install pytest pytest-cov httpx ruff bandit
           pip install --no-deps -e .
 
       - name: CLI entrypoint sanity check
@@ -39,4 +39,4 @@ jobs:
         run: bandit -r ncm_bench ncm_train service scripts -x scripts/as-run -ll
 
       - name: Run test suite with coverage gate
-        run: pytest -v --cov=ncm_bench --cov=ncm_train --cov=service --cov-report=term-missing --cov-fail-under=70 tests
+        run: python -m pytest -v --cov=ncm_bench --cov=ncm_train --cov=service --cov-report=term-missing --cov-fail-under=70 tests
