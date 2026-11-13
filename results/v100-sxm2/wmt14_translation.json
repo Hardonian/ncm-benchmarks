@@ -1,0 +1,6 @@
+{
+  "device": "V100-SXM2-16GB",
+  "dtype": "fp32",
+  "single_sample_bleu": 0.79,
+  "notes": "Single sample test only. Full WMT14 test set (3003 sentences) evaluation needed for proper BLEU. Model output appears to have tokenization issues on first sample."
+}

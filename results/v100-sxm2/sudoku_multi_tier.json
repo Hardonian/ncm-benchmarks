@@ -1,0 +1,40 @@
+{
+  "device": "V100-SXM2-16GB",
+  "dtype": "fp32",
+  "best_of_k": 4,
+  "repair": true,
+  "batch_size": 16,
+  "results": {
+    "easy": {
+      "solved_pct": 99.8,
+      "cell_pct": 99.98,
+      "valid_pct": 99.8,
+      "solved_count": 1996,
+      "n_boards": 2000,
+      "wall_s": 20.613,
+      "boards_per_sec": 97.03,
+      "ci_95_margin_pp": 0.22
+    },
+    "medium": {
+      "solved_pct": 98.55,
+      "cell_pct": 99.85,
+      "valid_pct": 98.55,
+      "solved_count": 1971,
+      "n_boards": 2000,
+      "wall_s": 25.716,
+      "boards_per_sec": 77.77,
+      "ci_95_margin_pp": 0.53
+    },
+    "hard": {
+      "solved_pct": 90.7,
+      "cell_pct": 98.65,
+      "valid_pct": 90.7,
+      "solved_count": 1814,
+      "n_boards": 2000,
+      "wall_s": 41.498,
+      "boards_per_sec": 48.2,
+      "ci_95_margin_pp": 1.27
+    }
+  },
+  "notes": "Best-of-4 + constraint repair across all tiers. Hard tier 90.7% exceeds paper 86.1% (which was greedy)."
+}

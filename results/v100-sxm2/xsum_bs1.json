@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+  File "/home/scott/ai-lab/ncm/ncm-benchmarks/ncm_bench/cli.py", line 646, in main
+    args.func(args)
+  File "/home/scott/ai-lab/ncm/ncm-benchmarks/ncm_bench/cli.py", line 386, in cmd_benchmark
+    t_small = _timed_run(args.small_n)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/ncm-benchmarks/ncm_bench/cli.py", line 373, in _timed_run
+    b = get_model_bundle(
+        ^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/ncm-benchmarks/ncm_bench/cli.py", line 27, in get_model_bundle
+    return load_bundle(
+           ^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/ncm-benchmarks/ncm_bench/inference.py", line 196, in load_bundle
+    raise FileNotFoundError(
+FileNotFoundError: Upstream NCM directory not found at /home/scott/ai-lab/ncm/ncm-benchmarks/ncm. Clone HazyResearch/ncm @ c702742 and apply patches/device-support.patch.

@@ -1,0 +1,13 @@
+{
+  "device": "V100-SXM2-16GB",
+  "dtype": "fp32",
+  "sweep": [
+    {"batch_size": 1, "marginal_s_per_doc": 0.049, "items_per_min": 1221.3, "small_s": 6.369, "large_s": 7.941},
+    {"batch_size": 8, "marginal_s_per_doc": 0.024, "items_per_min": 2461.0, "small_s": 6.083, "large_s": 6.864},
+    {"batch_size": 16, "marginal_s_per_doc": 0.027, "items_per_min": 2236.4, "small_s": 5.875, "large_s": 6.733},
+    {"batch_size": 32, "marginal_s_per_doc": 0.024, "items_per_min": 2536.3, "small_s": 5.896, "large_s": 6.653},
+    {"batch_size": 64, "marginal_s_per_doc": 0.022, "items_per_min": 2728.5, "small_s": 5.915, "large_s": 6.618}
+  ],
+  "optimal_batch_size": 64,
+  "notes": "V100 has qwen3.5:9b resident (6.5GB). bs=64 achieves best marginal throughput at 2728 docs/min."
+}

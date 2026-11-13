@@ -1,0 +1,13 @@
+{
+  "device": "V100-SXM2-16GB",
+  "dtype": "fp32",
+  "batch_size": 32,
+  "model_load_s": 5.554,
+  "marginal_s_per_doc": 0.107,
+  "items_per_min": 559.0,
+  "small_n": 8,
+  "small_s": 6.413,
+  "large_n": 11334,
+  "large_s": 1222.084,
+  "notes": "Full 11,334-doc XSum census completed. bs=32 (bs=64 OOM). 559 docs/min sustained throughput."
+}

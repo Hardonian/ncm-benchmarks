@@ -1,0 +1,25 @@
+/home/scott/ai-lab/ncm/venv/lib/python3.12/site-packages/torch/ao/nn/quantized/modules/utils.py:72: UserWarning: torch.quantize_per_tensor, torch.quantize_per_channel and other quantized tensor creation functions that produce tensors with dtype torch.quint8, torch.qint8, and torch.qint32 are deprecated and will be removed in a future PyTorch release. Please see https://github.com/pytorch/pytorch/issues/184982 for more information. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/quantized/Quantizer.cpp:111.)
+  qweight = torch.quantize_per_tensor(
+VQVAE, Total parameter count: 14.90M
+VQVAE, Non embedding parameter count: 14.87M
+NCP Transformer, Total parameter count: 25.46M
+NCP Transformer, Non embedding parameter count: 25.32M
+{
+  "n_boards": 2000,
+  "solved_pct": 90.85,
+  "cell_pct": 98.69,
+  "valid_pct": 90.95,
+  "format_valid_pct": 100.0,
+  "solved_count": 1817,
+  "ci_95": {
+    "p": 90.85,
+    "lower": 89.51,
+    "upper": 92.04,
+    "margin_pp": 1.26
+  },
+  "wall_s": 360.508,
+  "boards_per_sec": 5.55,
+  "best_of_k": 4,
+  "repair": true,
+  "difficulty": "hard"
+}

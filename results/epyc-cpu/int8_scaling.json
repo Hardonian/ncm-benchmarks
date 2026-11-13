@@ -1,0 +1,18 @@
+{
+  "device": "EPYC 7543P (single NUMA node 0, 32 threads)",
+  "dtype": "fp32",
+  "tasks": {
+    "xsum_latency_bs1": {
+      "fp32": {"marginal_s_per_doc": 1.411, "items_per_min": 42.5, "model_load_s": 4.826},
+      "int8": {"marginal_s_per_doc": 1.162, "items_per_min": 51.6, "model_load_s": 4.932},
+      "speedup_pct": 21.4
+    },
+    "sudoku_hard_bok4_repair_n2000": {
+      "fp32": {"solved_pct": 90.65, "wall_s": 366.98, "boards_per_sec": 5.45},
+      "int8": {"solved_pct": 90.85, "wall_s": 360.51, "boards_per_sec": 5.55},
+      "speedup_pct": 1.8,
+      "accuracy_delta_pp": 0.2
+    }
+  },
+  "notes": "INT8 quantization provides ~21% speedup on XSum latency, ~2% on Sudoku. Accuracy preserved within CI. NUMA node 0 binding used."
+}
