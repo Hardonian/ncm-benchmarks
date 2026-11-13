@@ -62,3 +62,4 @@ Organizations evaluating local-first AI often ask whether published H100 benchma
 - **Enterprise Controls**: Air-gapped execution (`HF_HUB_OFFLINE=1`), SHA-256 weight verification (`SHA256SUMS`), PII redaction/restoration, cryptographic audit receipts, Prometheus telemetry, and Kubernetes Helm charts.
 
 Explore the full open-source release (MIT): https://github.com/Hardonian/ncm-benchmarks
+
