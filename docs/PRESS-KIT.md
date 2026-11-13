@@ -11,26 +11,35 @@ Ready-to-publish announcements anchored strictly to verified receipts in [result
 ## 1. X / Twitter Thread Draft
 
 **Post 1/4 (Hook)**
+
 We benchmarked Stanford & Together AI's *Next-Concept Modeling* (`arXiv:2610.14162`) on non-H100 hardware: a 2018 V100 + a laptop CPU.
+
 - Full 11,334-doc XSum census on V100: **27.93 ROUGE-L** (vs paper 28.0, `9.47 docs/s`)
 - Full 2,000 Sudoku-Hard on V100: **86.30%** (vs paper 86.1%)
 - CPU Best-of-4 + bounded constraint repair (`n=100`): **91.0%** (`+7.0 pp`)
-Code, weights verifier & local API (MIT): https://github.com/Hardonian/ncm-benchmarks
+
+Code, weights verifier & local API (MIT): [github.com/Hardonian/ncm-benchmarks](https://github.com/Hardonian/ncm-benchmarks)
 
 **Post 2/4 (The Surprises & Null Results)**
+
 What papers don't tell you:
+
 - Laptop CPU batching (`bs=8` vs `bs=1`) saves **-1.9%** — fp32 GEMMs already saturate 16 cores at `bs=1`.
 - Dynamic INT8 + zero-pickle `.safetensors` (`n=32`, `bs=8`) gives **1.68x CPU speedup** for just **-0.24 pp ROUGE-L** (`1,036 ms` live API summary).
 
 **Post 3/4 (Missing Upstream Pieces We Built)**
+
 `HazyResearch/ncm` shipped inference code without training scripts or production serving. `ncm-benchmarks` adds:
+
 - Clean-room Stage-1 VQ-VAE & Stage-2 NCM trainers (`ncm_train/`)
 - Offline PDF map-reduce + PII redaction + SHA-256 audit receipts
 - Hardened async FastAPI + OpenAI `/v1/chat/completions` + Helm/systemd
 
 **Post 4/4 (Reproduce Yourself)**
+
 48/48 tests (`70.29%` coverage), 0 `ruff`/`bandit` findings, pinned `SHA256SUMS`, zero network calls at inference:
-https://github.com/Hardonian/ncm-benchmarks/releases/tag/v2.0.0
+
+[Release v2.0.0](https://github.com/Hardonian/ncm-benchmarks/releases/tag/v2.0.0)
 
 ---
 
@@ -52,7 +61,7 @@ We ran an independent reproduction and production engineering build around **Nex
 
 Honest caveats: single-shot CPU latency is `1.04–2.34 s/doc` (not sub-second), and CPU `bs=8` batching saves `-1.9%`.
 
-Repo (MIT): https://github.com/Hardonian/ncm-benchmarks
+Repo (MIT): [github.com/Hardonian/ncm-benchmarks](https://github.com/Hardonian/ncm-benchmarks)
 
 ---
 
@@ -61,9 +70,9 @@ Repo (MIT): https://github.com/Hardonian/ncm-benchmarks
 **Headline**: Sovereign 654 MB Document Intelligence & Non-H100 Reproduction of Stanford's Next-Concept Modeling
 
 Organizations evaluating local-first AI often ask whether published H100 benchmarks hold on affordable enterprise hardware. Our open-source reproduction (`ncm-benchmarks` v2.0.0) tested Stanford Hazy Research's Next-Concept Modeling end-to-end across a 2018 V100 and a laptop CPU:
+
 - **100% full-corpus parity on V100**: 34.92 / 12.71 / 27.93 ROUGE across all 11,334 XSum articles (within 0.07 pp of H100) and 86.30% on 2,000 Sudoku-Hard puzzles.
 - **CPU Edge Acceleration**: Zero-pickle `.safetensors` + dynamic INT8 delivered a **1.68x speedup** with only `-0.24 pp` ROUGE-L delta (`1,036 ms` live local API response), while Best-of-4 constraint search pushed Sudoku-Hard to **91.0%** (`n=100`).
 - **Enterprise Controls**: Air-gapped execution (`HF_HUB_OFFLINE=1`), SHA-256 weight verification (`SHA256SUMS`), PII redaction/restoration, cryptographic audit receipts, Prometheus telemetry, and Kubernetes Helm charts.
 
-Explore the full open-source release (MIT): https://github.com/Hardonian/ncm-benchmarks
-
+Explore the full open-source release (MIT): [github.com/Hardonian/ncm-benchmarks](https://github.com/Hardonian/ncm-benchmarks)
