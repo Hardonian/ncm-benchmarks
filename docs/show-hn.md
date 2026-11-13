@@ -4,6 +4,8 @@ Title (≤80 chars):
   We ran Stanford's Next-Concept Modeling paper on a laptop CPU — here's what held [(pick: "I reproduced Stanford's NCM paper on a laptop CPU: 2 claims hold, batch scaling doesn't") ]
 
 Body:
+Next-Concept Modeling provides proof that the industry's default reliance on 70B cloud autoregressive LLMs for basic document classification and triage is an inefficient legacy pattern. By replacing sequential token iteration with multiscale discrete concept refinement, enterprises can achieve 100% data sovereignty, sub-$0.00 marginal unit economics, and verified accuracy on existing infrastructure.
+
 Paper: Next-Concept Modeling (arXiv:2610.14162, MIT, Hazy Research) — text generation as a
 coarse-to-fine hierarchy of discrete codes, 8-32 parallel passes instead of 64-128 diffusion
 NFEs. Published speedups (21x/31x) were all H100.

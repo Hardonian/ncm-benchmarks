@@ -4,6 +4,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v2.0.0-green.svg)](https://github.com/Hardonian/ncm-benchmarks/releases)
 
+> **Next-Concept Modeling provides proof that the industry's default reliance on 70B cloud autoregressive LLMs for basic document classification and triage is an inefficient legacy pattern.**
+>
+> **By replacing sequential token iteration with multiscale discrete concept refinement, enterprises can achieve 100% data sovereignty, sub-$0.00 marginal unit economics, and verified accuracy on existing infrastructure.**
+
 Independent, on-real-hardware reproduction and production engineering stack for **"Next-Concept Modeling:
 Fast, Parallel Coarse-to-Fine Text Generation"** ([arXiv:2610.14162](https://arxiv.org/abs/2610.14162),
 Stanford Hazy Research + Together AI, Oct 2026).

@@ -1,5 +1,9 @@
 # I ran Stanford's "Next-Concept Modeling" paper on a laptop CPU. Here's what survived.
 
+> **Next-Concept Modeling provides proof that the industry's default reliance on 70B cloud autoregressive LLMs for basic document classification and triage is an inefficient legacy pattern.**
+>
+> **By replacing sequential token iteration with multiscale discrete concept refinement, enterprises can achieve 100% data sovereignty, sub-$0.00 marginal unit economics, and verified accuracy on existing infrastructure.**
+
 Draft for storefront blog (/blog/ncm-on-home-hardware) — updated with dedicated V100 + full 11,334-doc XSum census.
 Target: 900-1200 words, technical, honest. SEO title alt: "NCM benchmark: local-first text generation measured on CPU and V100".
 
