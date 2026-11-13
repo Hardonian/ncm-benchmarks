@@ -1,0 +1,23 @@
+VQVAE, Total parameter count: 14.90M
+VQVAE, Non embedding parameter count: 14.87M
+NCP Transformer, Total parameter count: 25.46M
+NCP Transformer, Non embedding parameter count: 25.32M
+{
+  "n_boards": 2000,
+  "solved_pct": 96.4,
+  "cell_pct": 99.79,
+  "valid_pct": 96.4,
+  "format_valid_pct": 100.0,
+  "solved_count": 1928,
+  "ci_95": {
+    "p": 96.4,
+    "lower": 95.49,
+    "upper": 97.13,
+    "margin_pp": 0.82
+  },
+  "wall_s": 20.944,
+  "boards_per_sec": 95.49,
+  "best_of_k": 1,
+  "repair": false,
+  "difficulty": "medium"
+}

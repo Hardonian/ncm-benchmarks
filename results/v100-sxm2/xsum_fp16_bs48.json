@@ -1,0 +1,41 @@
+Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+  File "/home/scott/ai-lab/ncm/ncm-benchmarks/ncm_bench/cli.py", line 646, in main
+    args.func(args)
+  File "/home/scott/ai-lab/ncm/ncm-benchmarks/ncm_bench/cli.py", line 386, in cmd_benchmark
+    t_small = _timed_run(args.small_n)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/ncm-benchmarks/ncm_bench/cli.py", line 383, in _timed_run
+    summarize_texts(b, passages[i : min(i + args.batch_size, n_items)])
+  File "/home/scott/ai-lab/ncm/ncm-benchmarks/ncm_bench/inference.py", line 422, in summarize_texts
+    g = bundle["net"].generate(
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/venv/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/ncm/models/next_concept.py", line 624, in generate
+    h = block(h, attn_mask=m0, rope_cos_sin=rope_0)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/ncm/models/common.py", line 205, in forward
+    a = self.attn(self.ln_1(x), attn_mask, rope_cos_sin=rope_cos_sin, block_mask=block_mask)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/scott/ai-lab/ncm/ncm/models/common.py", line 129, in forward
+    y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=self.dropout if self.training else 0, is_causal=use_causal)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: invalid dtype for bias - should match query's dtype
+VQVAE, Total parameter count: 60.63M
+VQVAE, Non embedding parameter count: 41.30M
+NCP Transformer, Total parameter count: 88.02M
+NCP Transformer, Non embedding parameter count: 87.71M

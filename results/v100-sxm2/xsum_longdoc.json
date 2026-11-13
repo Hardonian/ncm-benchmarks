@@ -1,0 +1,12 @@
+[ncm-bench] Loading model (quantize=none, dtype=fp32)...
+VQVAE, Total parameter count: 60.63M
+VQVAE, Non embedding parameter count: 41.30M
+NCP Transformer, Total parameter count: 88.02M
+NCP Transformer, Non embedding parameter count: 87.71M
+{
+  "summary": "Police are investigating a collision between traffic between Lisburn and Lisburn, Lisnburn.",
+  "words": 12,
+  "latency_ms": 1013,
+  "num_chunks": 5,
+  "pii_redactions": 0
+}

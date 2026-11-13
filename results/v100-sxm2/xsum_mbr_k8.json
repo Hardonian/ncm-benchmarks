@@ -1,0 +1,30 @@
+[ncm-bench] Running MBR decoding with N=8 candidates...
+VQVAE, Total parameter count: 60.63M
+VQVAE, Non embedding parameter count: 41.30M
+NCP Transformer, Total parameter count: 88.02M
+NCP Transformer, Non embedding parameter count: 87.71M
+{
+  "summary": "The government has announced spending of spending \u00a32% on renewable energy in renewable, energy and renewable projects over the next generation.",
+  "selected_index": 4,
+  "num_candidates": 8,
+  "candidates": [
+    "More on on renewable energy and renewable energy - is be cut by 20%.",
+    "A Scotland to spend almost \u00a32bn in part of a part in renewable energy renewable efficiency has announced unveiled by the Treasury.",
+    "fuels, renewable and renewable energy projects have been awarded a \u00a33.3m boost to boost renewable energy infrastructure.",
+    "The government's spending is to be spending on \u00a33.3bn a year generation generation new year of renewable energy Energy.",
+    "The government has announced spending of spending \u00a32% on renewable energy in renewable, energy and renewable projects over the next generation.",
+    "The Scottish government has cut its energy on renewable energy Energy.",
+    "onshoreshore energy projects are to be cut by an extra \u00a33.2bn to boost renewable energy and renewable energy.",
+    "The UK government has announced plans to cut energy gas and renewable by 2015 by \u00a32.3bn."
+  ],
+  "scores": [
+    1.9285,
+    1.557,
+    1.5166,
+    1.8882,
+    2.2617,
+    2.1692,
+    2.0292,
+    1.8714
+  ]
+}

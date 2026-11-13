@@ -1,0 +1,20 @@
+VQVAE, Total parameter count: 60.63M
+VQVAE, Non embedding parameter count: 41.30M
+NCP Transformer, Total parameter count: 88.02M
+NCP Transformer, Non embedding parameter count: 87.71M
+VQVAE, Total parameter count: 60.63M
+VQVAE, Non embedding parameter count: 41.30M
+NCP Transformer, Total parameter count: 88.02M
+NCP Transformer, Non embedding parameter count: 87.71M
+{
+  "model_load_s": 5.366,
+  "marginal_s_per_doc": 0.09,
+  "items_per_min": 664.1,
+  "small_n": 8,
+  "small_s": 6.089,
+  "large_n": 100,
+  "large_s": 14.401,
+  "batch_size": 1,
+  "quantize": "none",
+  "dtype": "fp32"
+}

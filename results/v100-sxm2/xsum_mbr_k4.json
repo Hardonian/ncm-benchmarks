@@ -1,0 +1,22 @@
+[ncm-bench] Running MBR decoding with N=4 candidates...
+VQVAE, Total parameter count: 60.63M
+VQVAE, Non embedding parameter count: 41.30M
+NCP Transformer, Total parameter count: 88.02M
+NCP Transformer, Non embedding parameter count: 87.71M
+{
+  "summary": "will spending spending by \u00a32bn by spending \u00c2\u00c2\u00a33.5bn in renewable energy and renewable energy.",
+  "selected_index": 2,
+  "num_candidates": 4,
+  "candidates": [
+    "The UK government has pledged to \u00a3350m in the renewable energy of renewable energy. energy, efficiency technologies by renewable Energy.",
+    "renewable energy Energy will cut 5,000 cut as part of a \u00a35.5bn investment in the UK by 2020.",
+    "will spending spending by \u00a32bn by spending \u00c2\u00c2\u00a33.5bn in renewable energy and renewable energy.",
+    "More spending on energy and spending will be spent on \u00a32bn in renewable green energy has been unveiled in the Chancellor George Osborne of George Osborne."
+  ],
+  "scores": [
+    0.6596,
+    0.5453,
+    0.7498,
+    0.6405
+  ]
+}

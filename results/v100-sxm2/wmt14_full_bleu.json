@@ -1,0 +1,19 @@
+{
+  "device": "V100-SXM2-16GB",
+  "dtype": "fp32",
+  "batch_size": 32,
+  "n_sentences": 3003,
+  "elapsed_s": 85.4,
+  "sentences_per_sec": 35.16,
+  "bleu_score": 21.72,
+  "bleu_breakdown": {
+    "precision": [
+      58.9444,
+      30.5175,
+      17.1386,
+      9.735
+    ],
+    "bp": 0.928,
+    "ratio": 0.9305
+  }
+}
