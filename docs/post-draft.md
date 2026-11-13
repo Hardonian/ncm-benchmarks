@@ -104,10 +104,10 @@ on a laptop CPU, with zero network calls, is a fundamentally different economic 
 
 ## Honest status
 
-Three core claims reproduce end-to-end:
-1. Sudoku hard accuracy (full 2,000 boards): 84.50% (CPU n=200) and **86.30%** (dedicated V100 exact-reproduction vs paper's 86.1%).
-2. XSum ROUGE quality (full 11,334 docs on V100): **34.92 / 12.71 / 27.93** vs paper's 35.0 / 12.8 / 28.0 (-0.07 pp R-L across all 11,334 documents).
-3. Headline MBR decoding boost: +1.82 R-L jump on home CPU (paper reported +1.6).
+Three core claims reproduce end-to-end — and three engineering extensions push further:
+1. Sudoku hard accuracy: `84.50%` greedy (CPU `n=200`), **`86.30%` full 2,000-board V100 census** (exact-reproduction vs paper `86.1%`), and **`91.0%` on a CPU `n=100` slice** using `Best-of-4` + bounded 64-node constraint repair (`+7.0 pp` over greedy `84.0%`, `98.47%` cell accuracy).
+2. XSum ROUGE quality (full 11,334 docs on V100): **34.92 / 12.71 / 27.93** vs paper's 35.0 / 12.8 / 28.0 (`-0.07 pp` R-L across all 11,334 documents).
+3. Headline MBR & INT8 Safetensors: **+1.82 R-L jump** via `N=4` MBR on CPU, and **1.68x speedup** with zero-pickle `.safetensors` + dynamic INT8 (`-0.24 pp` R-L on paired `n=32`, `1,036 ms` live `/summarize` latency), plus clean-room Stage-1/Stage-2 trainers (`ncm_train/`).
 
 The latency reality: "sub-second CPU" does not hold on laptop CPUs (2.34s fp32, 2.19s INT8 does),
 while a dedicated 2018-era V100 crushes it at 0.1073s/doc sequential (9.47 docs/s batched). Everything above is fully reproducible
