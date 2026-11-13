@@ -10,7 +10,7 @@ Ready-to-publish announcements anchored strictly to verified receipts in [result
 
 ## 1. X / Twitter Thread Draft
 
-**Post 1/4 (Hook)**
+### Post 1/4 (Hook)
 
 We benchmarked Stanford & Together AI's *Next-Concept Modeling* (`arXiv:2610.14162`) on non-H100 hardware: a 2018 V100 + a laptop CPU.
 
@@ -20,14 +20,14 @@ We benchmarked Stanford & Together AI's *Next-Concept Modeling* (`arXiv:2610.141
 
 Code, weights verifier & local API (MIT): [github.com/Hardonian/ncm-benchmarks](https://github.com/Hardonian/ncm-benchmarks)
 
-**Post 2/4 (The Surprises & Null Results)**
+### Post 2/4 (The Surprises & Null Results)
 
 What papers don't tell you:
 
 - Laptop CPU batching (`bs=8` vs `bs=1`) saves **-1.9%** — fp32 GEMMs already saturate 16 cores at `bs=1`.
 - Dynamic INT8 + zero-pickle `.safetensors` (`n=32`, `bs=8`) gives **1.68x CPU speedup** for just **-0.24 pp ROUGE-L** (`1,036 ms` live API summary).
 
-**Post 3/4 (Missing Upstream Pieces We Built)**
+### Post 3/4 (Missing Upstream Pieces We Built)
 
 `HazyResearch/ncm` shipped inference code without training scripts or production serving. `ncm-benchmarks` adds:
 
@@ -35,7 +35,7 @@ What papers don't tell you:
 - Offline PDF map-reduce + PII redaction + SHA-256 audit receipts
 - Hardened async FastAPI + OpenAI `/v1/chat/completions` + Helm/systemd
 
-**Post 4/4 (Reproduce Yourself)**
+### Post 4/4 (Reproduce Yourself)
 
 48/48 tests (`70.29%` coverage), 0 `ruff`/`bandit` findings, pinned `SHA256SUMS`, zero network calls at inference:
 
@@ -45,9 +45,12 @@ What papers don't tell you:
 
 ## 2. Reddit (`r/LocalLLaMA` & `r/MachineLearning`)
 
-**Title**: `[R] We reproduced Stanford's Next-Concept Modeling (arXiv:2610.14162) on all 11,334 XSum docs (2018 V100) + hit 91% Sudoku-Hard on CPU with Best-of-4 repair`
+### Title
 
-**Body**:
+`[R] We reproduced Stanford's Next-Concept Modeling (arXiv:2610.14162) on all 11,334 XSum docs (2018 V100) + hit 91% Sudoku-Hard on CPU with Best-of-4 repair`
+
+### Body
+
 We ran an independent reproduction and production engineering build around **Next-Concept Modeling** (discrete hierarchical codes, `K=9`–`12` parallel forward passes instead of 64–128 diffusion steps) on consumer/commodity silicon (`Ryzen AI 9 HX 370` CPU + dedicated `V100-SXM2`):
 
 - **Exact V100 reproduction (`results/v100-sxm2/results.json`)**:
@@ -67,7 +70,11 @@ Repo (MIT): [github.com/Hardonian/ncm-benchmarks](https://github.com/Hardonian/n
 
 ## 3. LinkedIn Summary Post
 
-**Headline**: Sovereign 654 MB Document Intelligence & Non-H100 Reproduction of Stanford's Next-Concept Modeling
+### Headline
+
+Sovereign 654 MB Document Intelligence & Non-H100 Reproduction of Stanford's Next-Concept Modeling
+
+### Summary
 
 Organizations evaluating local-first AI often ask whether published H100 benchmarks hold on affordable enterprise hardware. Our open-source reproduction (`ncm-benchmarks` v2.0.0) tested Stanford Hazy Research's Next-Concept Modeling end-to-end across a 2018 V100 and a laptop CPU:
 
