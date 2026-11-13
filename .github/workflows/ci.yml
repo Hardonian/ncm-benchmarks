@@ -29,6 +29,12 @@ jobs:
           pip install pytest pytest-cov httpx ruff bandit
           pip install --no-deps -e .
 
+      - name: Clone and patch upstream NCM
+        run: |
+          git clone https://github.com/HazyResearch/ncm.git ncm
+          git -C ncm checkout c70274273f489abc73832b2b98584a8483b6b203
+          git -C ncm apply ../patches/device-support.patch
+
       - name: CLI entrypoint sanity check
         run: ncm-bench --help
 
