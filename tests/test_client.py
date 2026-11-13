@@ -98,3 +98,25 @@ def test_client_auth_and_busy_errors():
         mock_resp.text = "Server overloaded"
         with pytest.raises(NCMServerBusyError):
             client.summarize("text")
+
+
+def test_client_sudoku_batch_mbr_and_chat():
+    client = NCMClient()
+    with patch.object(client.session, "request") as mock_req:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status.return_value = None
+
+        mock_resp.json.return_value = {"board": "1" * 81, "cells": "1" * 81, "valid": True}
+        mock_req.return_value = mock_resp
+        res = client.sudoku("5" + "0" * 80, best_of_k=2)
+        assert res["valid"] is True
+
+        mock_resp.json.return_value = {"results": [{"summary": "MBR Sum"}], "count": 2, "latency_ms": 50.0}
+        res_mbr = client.batch_mbr_summarize_server(["A", "B"], num_candidates=3)
+        assert res_mbr["results"][0]["summary"] == "MBR Sum"
+
+        mock_resp.json.return_value = {"id": "chatcmpl-1", "choices": [{"message": {"content": "Hi"}}]}
+        res_chat = client.chat_completions("Hello")
+        assert res_chat["choices"][0]["message"]["content"] == "Hi"
+

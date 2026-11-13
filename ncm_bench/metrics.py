@@ -136,3 +136,18 @@ def two_size_timing(t_small: float, n_small: int, t_large: float, n_large: int) 
         "items_per_min": round(throughput, 1),
     }
 
+
+def score_bleu(hyps: list[str], refs: list[str]) -> dict[str, Any]:
+    """Computes corpus BLEU score (WMT14 De-En evaluation) via sacrebleu."""
+    import sacrebleu
+
+    if len(hyps) != len(refs):
+        raise ValueError(f"Length mismatch: {len(hyps)} hyps vs {len(refs)} refs")
+    bleu = sacrebleu.corpus_bleu(hyps, [refs])
+    return {
+        "bleu": round(float(bleu.score), 2),
+        "precisions": [round(float(p), 2) for p in bleu.precisions],
+        "bp": round(float(bleu.bp), 4),
+    }
+
+

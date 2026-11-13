@@ -8,10 +8,15 @@
      - XSum full **11,334-doc census**: **34.92 / 12.71 / 27.93** (ROUGE-1/2/L) in 1,241.0 s (**9.13 docs/s**, bs=32), within **0.07–0.09 pp** of the paper's 35.0 / 12.8 / 28.0.
      - Clean V100 latency: **0.1073 s/doc** marginal (`bs=1`), **0.0974 s/doc** marginal (`bs=32`, **9.47 docs/s**).
   2. MBR decoding empirical benchmark: verified +1.82 R-L gain at N=4 on CPU (`results/hx370-cpu/mbr/results.json`).
-  3. INT8 dynamic quantization: 1.32x speedup on CPU (2.89 s -> 2.19 s, 27.4 docs/min).
-  4. Progressive Hierarchical Concept Decoder: Level 0 -> Level 8 coarse-to-fine inspection (`ncm_bench/progressive.py` + `artifacts/visualizer/index.html`), hardened with XSS escaping + CSP.
-  5. Hardened Service & Unified Engine: `ncm_bench/inference.py` + `service/summarize_server.py` (pre-load SHA-256 verification, Pydantic v2 bounds, Bearer auth via `NCM_API_KEY`, bounded queue 503 backpressure, `/ready`, Prometheus `/metrics`, `/batch_summarize`), resilient `NCMClient` with retry/backoff, `scripts/batch_triage.py` (`--resume`, `--errors-out`, signal handling), and `ncm-bench` CLI (`sudoku`, `benchmark`, CUDA auto-detection fix).
-  6. Test & Security Verification: `pytest tests/` (33/33 passing against real `create_app()`), `ruff check`, `bandit`, non-root read-only Docker Compose, and `.github/workflows/ci.yml`.
-- Open items: (1) publish blog draft (EPYC `~/ai-lab/reports/content/drafts/2026-11-12-ncm-*`) + Show HN (copy in `docs/show-hn.md`).
-- Do not commit: `*.pkl`, `artifacts/`, `data/`, `venv*/`, `.venv*/`, `ncm/`, `hf-home/` (gitignored on purpose).
+  3. Zero-pickle Safetensors + INT8 parity + Sudoku Best-of-K ablations (`results/hx370-cpu/reality_checks.json`):
+     - `xsum` and `sudoku/hard` convert cleanly to `.safetensors` + `inference_meta.json` and run end-to-end with `strict_checksums=True`.
+     - Paired XSum FP32 vs INT8 (`n=32`, CPU `bs=8`): ROUGE-L **27.89 -> 27.65** (`-0.24 pp`) at **1.68x** faster wall time (`55.93s -> 33.26s`).
+     - Sudoku-Hard (`n=100`, CPU): Greedy `84.0%` -> Constraint Repair `86.0%` -> **Best-of-4 + Repair `89.0%`** (Wilson 95% CI `81.37-93.75%`).
+  4. Clean-room Stage-1 VQ-VAE + Stage-2 Next-Concept Transformer trainers (`ncm_train/`), verified with `ncm-bench train-smoke` (`stage1_loss 159.01 -> 3.90`, `stage2_loss 3.62 -> 2.33`).
+  5. Enterprise CLI & Hardened Async Service: `ncm_bench/longdoc.py` (offline PDF/text, PII redaction/restore, chunked map-reduce, SHA-256 audit receipts), async `service/summarize_server.py` (413/429/histogram/`/sudoku`/`/v1/chat/completions`/`/progressive_stream`/`/batch_mbr_summarize`/`--uds`), SDK `service/client.py`, `scripts/fetch_artifacts.py --tasks`, systemd unit, Helm chart (`deploy/helm/ncm-summarizer/`), and pre-commit / CI coverage gate (`--cov-fail-under=70`).
+  6. Test & Security Verification: `pytest --cov` (46/46 passing, 70.19% coverage), `ruff check` (0 issues), `bandit` (0 issues across 2,952 LOC).
+- External / Hardware Boundaries still requiring operator action:
+  1. External NVIDIA V100 / multi-GPU runs on EPYC (full 11,334-doc XSum MBR, WMT14/LM1B evaluation, large-scale `ncm_train` checkpoints).
+  2. External publication & distribution (PyPI release, GHCR container push, publishing blog / Show HN post).
+- Do not commit: `*.pkl`, `*.pt`, `*.safetensors`, `artifacts/`, `data/`, `venv*/`, `.venv*/`, `ncm/`, `hf-home/` (gitignored on purpose).
 - Remote commits can arrive mid-task (desktop agents push to main) — fetch/rebase before push.

@@ -152,3 +152,97 @@ def test_queue_backpressure_returns_503():
         release.set()
         t.join(timeout=2.0)
         assert holder["res"].status_code == 200
+
+
+def test_sudoku_openai_batch_mbr_and_progressive_stream() -> None:
+    bundle = _dummy_bundle()
+    puzzle = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
+    with (
+        patch(
+            "service.summarize_server.solve_sudoku",
+            return_value=[{"board": "5" * 81, "cells": "5" * 81, "valid": True}],
+        ),
+        patch(
+            "service.summarize_server.summarize_texts",
+            side_effect=lambda b, texts, **kw: [f"Sum:{t}" for t in texts],
+        ),
+        patch(
+            "service.summarize_server.generate_mbr_summary",
+            side_effect=lambda b, text, **kw: {"summary": f"MBR:{text}", "selected_index": 0, "num_candidates": 2},
+        ),
+        patch(
+            "service.summarize_server.progressive_decode",
+            return_value={
+                "num_levels": 1,
+                "final_summary": "Stream",
+                "levels": [{"level": 0, "codes_at_level": 2, "total_codes_so_far": 2, "text": "Stream", "words": 1}],
+            },
+        ),
+    ):
+        app = create_app(bundle=bundle, sudoku_bundle=bundle)
+        with TestClient(app) as client:
+            models_resp = client.get("/v1/models")
+            assert models_resp.status_code == 200
+            model_ids = [m["id"] for m in models_resp.json()["data"]]
+            assert "ncm-xsum-88M" in model_ids
+            assert "ncm-sudoku-25M" in model_ids
+
+            chat_resp = client.post(
+                "/v1/chat/completions",
+                json={"model": "ncm-xsum-88M", "messages": [{"role": "user", "content": "Hello world"}]},
+            )
+            assert chat_resp.status_code == 200
+            chat_data = chat_resp.json()
+            assert chat_data["object"] == "chat.completion"
+            assert chat_data["choices"][0]["message"]["content"] == "Sum:Hello world"
+
+            batch_resp = client.post(
+                "/batch_mbr_summarize",
+                json={"texts": ["Doc one", "Doc two"], "num_candidates": 2},
+            )
+            assert batch_resp.status_code == 200
+            assert len(batch_resp.json()["results"]) == 2
+
+            sudoku_resp = client.post("/sudoku", json={"puzzle": puzzle, "best_of_k": 2, "repair": True})
+            assert sudoku_resp.status_code == 200
+            sdata = sudoku_resp.json()
+            assert sdata["valid"] is True
+
+            stream_resp = client.post("/progressive_stream", json={"text": "Stream test"})
+            assert stream_resp.status_code == 200
+            assert "text/event-stream" in stream_resp.headers["content-type"]
+            assert "event: done" in stream_resp.text
+
+
+def test_body_limit_rate_limit_strict_auth_and_histogram() -> None:
+    bundle = _dummy_bundle()
+    with patch("service.summarize_server.summarize_texts", return_value=["ok"]):
+        app = create_app(
+            bundle=bundle,
+            max_body_bytes=64,
+            rate_limit_rpm=2,
+            api_key="sec-token",
+            strict_auth=True,
+        )
+        with TestClient(app) as client:
+            assert client.get("/metrics").status_code == 401
+
+            big = client.post(
+                "/summarize",
+                json={"text": "x" * 200},
+                headers={"Authorization": "Bearer sec-token"},
+            )
+            assert big.status_code == 413
+
+            r1 = client.post("/summarize", json={"text": "a"}, headers={"Authorization": "Bearer sec-token"})
+            r2 = client.post("/summarize", json={"text": "b"}, headers={"Authorization": "Bearer sec-token"})
+            r3 = client.post("/summarize", json={"text": "c"}, headers={"Authorization": "Bearer sec-token"})
+            assert r1.status_code == 200
+            assert r2.status_code == 200
+            assert r3.status_code == 429
+            assert "retry-after" in r3.headers
+
+            metrics_ok = client.get("/metrics", headers={"Authorization": "Bearer sec-token"})
+            assert metrics_ok.status_code == 200
+            assert "ncm_inference_duration_seconds_bucket" in metrics_ok.text
+

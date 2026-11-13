@@ -94,7 +94,7 @@ class NCMClient:
         text: str,
         num_candidates: int = 4,
         temperature: float = 0.7,
-        utility: Literal["rougeL", "jaccard"] = "rougeL",
+        utility: Literal["rougeL", "jaccard", "cosine"] = "rougeL",
     ) -> dict[str, Any]:
         """Generates candidates and selects the MBR consensus centroid."""
         return self._request(
@@ -111,6 +111,52 @@ class NCMClient:
     def progressive_summarize(self, text: str) -> dict[str, Any]:
         """Extracts text across all 9 discrete concept levels (k=0..8)."""
         return self._request("POST", "/progressive_summarize", json={"text": text})
+
+    def batch_mbr_summarize_server(
+        self,
+        texts: list[str],
+        num_candidates: int = 4,
+        temperature: float = 0.7,
+        utility: Literal["rougeL", "jaccard", "cosine"] = "rougeL",
+    ) -> dict[str, Any]:
+        """Sends up to 16 documents to POST /batch_mbr_summarize."""
+        return self._request(
+            "POST",
+            "/batch_mbr_summarize",
+            json={
+                "texts": texts,
+                "num_candidates": num_candidates,
+                "temperature": temperature,
+                "utility": utility,
+            },
+        )
+
+    def sudoku(
+        self,
+        puzzle: str,
+        best_of_k: int = 1,
+        temperature: float = 0.4,
+        repair: bool = True,
+    ) -> dict[str, Any]:
+        """Solves and validates an 81-char Sudoku puzzle via POST /sudoku."""
+        return self._request(
+            "POST",
+            "/sudoku",
+            json={
+                "puzzle": puzzle,
+                "best_of_k": best_of_k,
+                "temperature": temperature,
+                "repair": repair,
+            },
+        )
+
+    def chat_completions(self, prompt: str, model: str = "ncm-xsum-88M") -> dict[str, Any]:
+        """Calls the OpenAI-compatible POST /v1/chat/completions endpoint."""
+        return self._request(
+            "POST",
+            "/v1/chat/completions",
+            json={"model": model, "messages": [{"role": "user", "content": prompt}]},
+        )
 
     def batch_summarize(
         self,

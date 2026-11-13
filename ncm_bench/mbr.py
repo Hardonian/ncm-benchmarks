@@ -7,6 +7,8 @@ Where Utility is ROUGE-L F1 or Token Jaccard overlap.
 """
 from __future__ import annotations
 
+import math
+from collections import Counter
 from typing import Literal
 
 import torch
@@ -49,9 +51,30 @@ def compute_pairwise_jaccard(candidates: list[str]) -> list[float]:
     return scores
 
 
+def compute_pairwise_cosine(candidates: list[str]) -> list[float]:
+    """Fast bag-of-words TF cosine similarity utility matrix."""
+    K = len(candidates)
+    if K == 1:
+        return [1.0]
+
+    vecs = [Counter(c.lower().split()) for c in candidates]
+    norms = [math.sqrt(sum(v * v for v in vec.values())) for vec in vecs]
+    scores = [0.0] * K
+    for i in range(K):
+        for j in range(i + 1, K):
+            if norms[i] == 0.0 or norms[j] == 0.0:
+                sim = 0.0
+            else:
+                dot = sum(vecs[i][w] * vecs[j][w] for w in vecs[i] if w in vecs[j])
+                sim = dot / (norms[i] * norms[j])
+            scores[i] += sim
+            scores[j] += sim
+    return scores
+
+
 def select_mbr_centroid(
     candidates: list[str],
-    utility: Literal["rougeL", "jaccard"] = "rougeL",
+    utility: Literal["rougeL", "jaccard", "cosine"] = "rougeL",
 ) -> tuple[str, int, list[float]]:
     """Selects the candidate with the highest consensus utility.
 
@@ -67,6 +90,8 @@ def select_mbr_centroid(
         scores = compute_pairwise_rouge_l(candidates)
     elif utility == "jaccard":
         scores = compute_pairwise_jaccard(candidates)
+    elif utility == "cosine":
+        scores = compute_pairwise_cosine(candidates)
     else:
         raise ValueError(f"Unknown utility metric: {utility}")
 
@@ -81,7 +106,7 @@ def generate_mbr_summary(
     temperature: float = 0.7,
     top_k: int = 50,
     top_p: float = 0.9,
-    utility: Literal["rougeL", "jaccard"] = "rougeL",
+    utility: Literal["rougeL", "jaccard", "cosine"] = "rougeL",
 ) -> dict:
     """Generates K parallel candidates with temperature sampling and selects MBR centroid."""
     if num_candidates < 1:

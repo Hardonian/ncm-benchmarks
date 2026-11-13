@@ -71,20 +71,34 @@ def render_progressive_html(result: dict[str, Any], prompt_text: str = "") -> st
     """Generates a standalone, XSS-safe dark-themed HTML interactive slider visualizer."""
     levels = result["levels"]
     rows = []
+    prev_words: set[str] = set()
     for lvl in levels:
         pct = round((lvl["level"] + 1) / max(len(levels), 1) * 100)
-        escaped_text = html.escape(str(lvl.get("text", "")), quote=True)
+        raw_text = str(lvl.get("text", ""))
+        escaped_text = html.escape(raw_text, quote=True)
         body_html = escaped_text if escaped_text else "<i>(initial semantic codes)</i>"
+        added_words = [
+            html.escape(w, quote=True) for w in raw_text.split() if w.lower() not in prev_words
+        ]
+        prev_words |= {w.lower() for w in raw_text.split()}
+        diff_html = (
+            '<div class="diff-row">Added: '
+            + " ".join(f'<span class="tok-added">{w}</span>' for w in added_words[:12])
+            + "</div>"
+            if added_words
+            else ""
+        )
         rows.append(
             f"""
         <div class="level-card" id="card-{int(lvl['level'])}">
             <div class="level-header">
                 <span class="badge">Level {int(lvl['level'])}</span>
-                <span class="meta">{int(lvl['codes_at_level'])} codes ({int(lvl['total_codes_so_far'])} accumulated)</span>
+                <span class="meta">{int(lvl['codes_at_level'])} codes ({int(lvl['total_codes_so_far'])} accumulated, +{len(added_words)} new)</span>
                 <span class="pct">{pct}% fidelity</span>
             </div>
             <div class="level-body">
                 <p class="text-output">{body_html}</p>
+                {diff_html}
             </div>
         </div>
         """
@@ -113,6 +127,7 @@ def render_progressive_html(result: dict[str, Any], prompt_text: str = "") -> st
   .meta {{ color: #64748b; font-size: 0.85rem; }}
   .pct {{ color: #38bdf8; font-weight: 600; font-size: 0.85rem; }}
   .text-output {{ font-size: 1.05rem; line-height: 1.5; color: #f1f5f9; }}
+  .tok-added {{ background: rgba(56, 189, 248, 0.22); color: #7dd3fc; border-radius: 3px; padding: 0 3px; }}
 </style>
 </head>
 <body>

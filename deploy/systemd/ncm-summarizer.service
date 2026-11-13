@@ -1,0 +1,29 @@
+[Unit]
+Description=Next-Concept Modeling Sovereign Summarizer Service
+After=network-online.target
+
+[Service]
+Type=simple
+User=ncmuser
+Group=ncmgroup
+WorkingDirectory=/opt/ncm-benchmarks
+Environment="NCM_HOME=/opt/ncm-benchmarks"
+Environment="NCM_ROOT=/opt/ncm-benchmarks/ncm"
+Environment="NCM_DEVICE=cpu"
+Environment="NCM_STRICT_CHECKSUMS=1"
+Environment="HF_HUB_OFFLINE=1"
+Environment="OMP_NUM_THREADS=8"
+EnvironmentFile=-/etc/ncm-summarizer/env
+ExecStartPre=/opt/ncm-benchmarks/.venv/bin/ncm-bench verify
+ExecStart=/opt/ncm-benchmarks/.venv/bin/ncm-bench serve --host 127.0.0.1 --port 8031 --quantize int8 --strict-checksums
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/opt/ncm-benchmarks
+
+[Install]
+WantedBy=multi-user.target
+

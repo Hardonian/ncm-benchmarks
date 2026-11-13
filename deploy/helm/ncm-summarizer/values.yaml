@@ -1,0 +1,34 @@
+replicaCount: 2
+
+image:
+  repository: hardonian/ncm-sovereign-summarizer
+  tag: "2.2.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8031
+
+env:
+  NCM_DEVICE: cpu
+  OMP_NUM_THREADS: "8"
+  NCM_STRICT_CHECKSUMS: "1"
+  NCM_STRICT_AUTH: "1"
+
+resources:
+  requests:
+    cpu: "2"
+    memory: "2Gi"
+  limits:
+    cpu: "8"
+    memory: "4Gi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+
+networkPolicy:
+  denyAllEgress: true
+

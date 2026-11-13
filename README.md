@@ -27,12 +27,14 @@ in `results/`.
 | **XSum MBR decoding (N=4 consensus)** | +1.6 R-L jump via parallel MBR (28.0 -> 29.6) | **+1.82 R-L jump** (R-L 25.26 -> **27.08**, R-1 31.50 -> **34.04**) / CPU fp32 | **Reproduces paper's headline quality win on CPU** |
 | **CPU INT8 dynamic quantization** | -- | **2.19 s/doc** marginal (vs 2.89 s fp32), **1.32x speedup**, 27.4 docs/min sustained | Zero-retraining CPU acceleration |
 | CPU summary latency | -- | **2.34 s/doc** marginal (bs=1), ~5.7 s cold load, 25 docs/min sustained | "Sub-second local" does NOT hold on a laptop CPU; 2.3 s does |
-| Batching on CPU | -- | bs=8 saves **-1.9%** vs bs=1 (i.e. nothing) | Null result, reported honestly: fp32 GEMMs already saturate 16 cores at bs=1 |
+| **Batching on CPU** | -- | bs=8 saves **-1.9%** vs bs=1 (i.e. nothing) | Null result, reported honestly: fp32 GEMMs already saturate 16 cores at bs=1 |
+| **XSum FP32 vs INT8 parity (`n=32`, CPU `bs=8`)** | -- | **FP32 27.89** (`55.93s`) vs **INT8 27.65 R-L** (`33.26s`, **1.68x**) | Only **-0.24 pp R-L** loss via zero-pickle `.safetensors` |
+| **Sudoku hard Best-of-4 + Repair (`n=100`, CPU)** | -- | Greedy `84.0%` -> Repair `86.0%` -> **Best-of-4 + Repair `89.0%`** (`22.98s`) | **+5.0 pp** win using Best-of-4 sampling + cell constraint repair |
 | **Sudoku hard — FULL 2000 boards (V100)** | 86.1% solved / full test | **86.30%** (1726/2000), cell 98.35%, 26.0 s wall incl. load, bs=128 | **Exact-configuration reproduction: +0.2 pp** |
 | **XSum — FULL 11,334-doc census (V100, bs=32)** | 35.0 / 12.8 / 28.0 full test | **34.92 / 12.71 / 27.93** (20.7 avg words, 1,241 s wall, 9.13 docs/s) | **Exact full-corpus reproduction: -0.07 pp R-L** |
 | GPU summary latency (dedicated V100) | -- | **0.1073 s/doc** sequential (bs=1), **0.0974 s/doc** marginal (bs=32) = **9.47 docs/s** | 22x faster than this box's CPU on 2018 silicon |
 
-Full machine-readable summaries: [results/hx370-cpu/results.json](results/hx370-cpu/results.json) and [results/v100-sxm2/results.json](results/v100-sxm2/results.json).
+Full machine-readable summaries: [results/hx370-cpu/results.json](results/hx370-cpu/results.json), [results/hx370-cpu/reality_checks.json](results/hx370-cpu/reality_checks.json), and [results/v100-sxm2/results.json](results/v100-sxm2/results.json).
 Raw per-run logs in `results/<machine>/`.
 
 **V100 telemetry (clean dedicated pass):** V100-SXM2-16GB had `5 MB` VRAM before start, `12,794 MB` peak VRAM, and **zero** co-tenant / allocator OOM-retry warnings across both full test sets and latency sweeps.
@@ -133,23 +135,31 @@ python -m ncm_bench.cli mbr --text "<document...>" --candidates 4
 # Inspect the 9-level concept hierarchy and generate an HTML visualizer
 python -m ncm_bench.cli inspect --text "<document...>" --html visualizer.html
 
-# Solve a Sudoku puzzle or evaluate Sudoku-Hard with full constraint validation
-python -m ncm_bench.cli sudoku --n 20 --batch-size 16 --json
+# Solve a Sudoku puzzle or evaluate Sudoku-Hard with Best-of-K sampling + constraint repair
+python -m ncm_bench.cli sudoku --n 20 --best-of-k 4 --json
+
+# Export local checkpoints to zero-pickle Safetensors and verify strict checksums
+python -m ncm_bench.cli convert-safetensors --task xsum
+python -m ncm_bench.cli summarize --input-file report.pdf --long-doc --redact-pii --restore-pii --audit-receipt --strict-checksums --json
+
+# Clean-room Stage-1 VQ-VAE + Stage-2 Next-Concept Transformer training smoke test
+python -m ncm_bench.cli train-smoke --samples 32 --s1-steps 15 --s2-steps 15
 
 # Run a 2-size timing benchmark separating model load from marginal per-doc latency
 python -m ncm_bench.cli benchmark --task latency --small-n 4 --large-n 16 --quantize int8
 
-# Launch hardened local REST service (loopback, bounded queue, optional Bearer auth via NCM_API_KEY)
+# Launch hardened local REST service (async offloaded, 413/429 limits, Bearer auth, OpenAI compat)
 python -m ncm_bench.cli serve --port 8031 --quantize int8 --max-queue-depth 8
 ```
 
 ## Turnkey Deployment & SDK
 
-### One-Click Local Runners & Hardened Container
+### One-Click Local Runners, Container, systemd & Helm
 - **Windows**: double-click or run `run_service.bat`
 - **Linux / macOS**: run `./run_service.sh`
-- **Docker Compose**: `docker compose up -d` (non-root `ncmuser`, read-only rootfs, `cap_drop: ALL`, `no-new-privileges`, loopback-bound `127.0.0.1:8031` in [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml))
-- **CI Pipeline**: [GitHub Actions CI](.github/workflows/ci.yml) runs `ruff`, `bandit`, and `pytest` on every push and PR.
+- **Docker Compose**: `docker compose up -d` (non-root `ncmuser`, read-only rootfs, `cap_drop: ALL`, `no-new-privileges`, `NCM_STRICT_CHECKSUMS=1`, loopback-bound `127.0.0.1:8031` in [Dockerfile](Dockerfile) and [docker-compose.yml](docker-compose.yml))
+- **systemd / Kubernetes Helm**: [deploy/systemd/ncm-summarizer.service](deploy/systemd/ncm-summarizer.service) and [deploy/helm/ncm-summarizer/](deploy/helm/ncm-summarizer/)
+- **CI Pipeline & Pre-commit**: [GitHub Actions CI](.github/workflows/ci.yml) runs `ruff`, `bandit`, and `pytest --cov` (`>=70%` gate) across Linux/Windows + Python 3.11/3.12; see [CHANGELOG.md](CHANGELOG.md).
 
 ### Python Client SDK (`service/client.py`)
 ```python

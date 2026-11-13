@@ -60,3 +60,67 @@ def test_cli_sudoku_single_puzzle_mocked(capsys):
                 out = json.loads(capsys.readouterr().out)
                 assert out["valid"] is True
                 assert out["cells"] == solved_81
+
+
+def test_cli_longdoc_pii_audit_and_file_io(tmp_path, capsys):
+    src = tmp_path / "doc.txt"
+    out_file = tmp_path / "summary.json"
+    src.write_text(
+        ("Email alice@example.com about quarterly earnings in London. " * 40),
+        encoding="utf-8",
+    )
+    with patch("ncm_bench.cli.get_model_bundle") as mock_bundle:
+        mock_bundle.return_value = {"task": "xsum", "device": "cpu", "quantize": "none"}
+        with patch("ncm_bench.longdoc.summarize_texts", side_effect=lambda b, texts, **kw: ["Email [EMAIL_1] summary."] * len(texts)):
+            with patch.object(
+                sys,
+                "argv",
+                [
+                    "ncm-bench",
+                    "summarize",
+                    "--input-file",
+                    str(src),
+                    "--output-file",
+                    str(out_file),
+                    "--long-doc",
+                    "--redact-pii",
+                    "--restore-pii",
+                    "--audit-receipt",
+                    "--json",
+                ],
+            ):
+                main()
+                capsys.readouterr()
+                payload = json.loads(out_file.read_text(encoding="utf-8"))
+                assert "alice@example.com" in payload["summary"]
+                assert payload["audit_receipt"]["pii_redactions"] >= 1
+
+
+def test_cli_translate_convert_and_train_smoke(tmp_path, capsys):
+    with patch("ncm_bench.cli.get_model_bundle", return_value={"mock": True}):
+        with patch("ncm_bench.inference.summarize_texts", return_value=["Hello Germany."]):
+            with patch.object(sys, "argv", ["ncm-bench", "translate", "--text", "Hallo Deutschland.", "--json"]):
+                main()
+                out = json.loads(capsys.readouterr().out)
+                assert out["translation"] == "Hello Germany."
+
+    with patch("ncm_bench.inference.export_safetensors", return_value={"vqvae": tmp_path / "vq.safetensors"}):
+        with patch.object(sys, "argv", ["ncm-bench", "convert-safetensors", "--task", "xsum"]):
+            main()
+            out = json.loads(capsys.readouterr().out)
+            assert "vqvae" in out
+
+    smoke_dir = tmp_path / "smoke"
+    with patch.object(
+        sys,
+        "argv",
+        ["ncm-bench", "train-smoke", "--samples", "16", "--s1-steps", "3", "--s2-steps", "3", "--out-dir", str(smoke_dir)],
+    ):
+        main()
+        raw_out = capsys.readouterr().out
+        out = json.loads(raw_out[raw_out.index("{") :])
+        assert "stage1_final_loss" in out
+        assert "stage2_final_loss" in out
+        assert (smoke_dir / "tokenizer.pt").exists()
+        assert (smoke_dir / "generator.pt").exists()
+

@@ -1,0 +1,93 @@
+{
+  "hardware": "AMD Ryzen AI 9 HX 370 (CPU-only, PyTorch 2.15.0+cpu)",
+  "safetensors_zero_pickle_verified": true,
+  "xsum_fp32_vs_int8_ablation_n32": {
+    "n_docs": 32,
+    "batch_size": 8,
+    "fp32": {
+      "rouge1": 34.61,
+      "rouge2": 12.98,
+      "rougeL": 27.89,
+      "n_samples": 32,
+      "wall_s": 55.925,
+      "ckpt_format": "safetensors"
+    },
+    "int8": {
+      "rouge1": 34.23,
+      "rouge2": 11.41,
+      "rougeL": 27.65,
+      "n_samples": 32,
+      "wall_s": 33.26,
+      "ckpt_format": "safetensors"
+    },
+    "rougeL_delta_int8_minus_fp32": -0.24,
+    "speedup_factor": 1.68
+  },
+  "sudoku_hard_best_of_k_ablation_n100": {
+    "n_boards": 100,
+    "ckpt_format": "safetensors",
+    "greedy_k1_no_repair": {
+      "n_boards": 100,
+      "solved_pct": 84.0,
+      "cell_pct": 98.07,
+      "valid_pct": 84.0,
+      "format_valid_pct": 100.0,
+      "solved_count": 84,
+      "ci_95": {
+        "p": 84.0,
+        "lower": 75.58,
+        "upper": 89.9,
+        "margin_pp": 7.16
+      },
+      "wall_s": 14.751,
+      "wilson_95ci": {
+        "p": 84.0,
+        "lower": 75.58,
+        "upper": 89.9,
+        "margin_pp": 7.16
+      }
+    },
+    "greedy_k1_with_repair": {
+      "n_boards": 100,
+      "solved_pct": 86.0,
+      "cell_pct": 98.12,
+      "valid_pct": 86.0,
+      "format_valid_pct": 100.0,
+      "solved_count": 86,
+      "ci_95": {
+        "p": 86.0,
+        "lower": 77.86,
+        "upper": 91.47,
+        "margin_pp": 6.81
+      },
+      "wall_s": 14.804,
+      "wilson_95ci": {
+        "p": 86.0,
+        "lower": 77.86,
+        "upper": 91.47,
+        "margin_pp": 6.81
+      }
+    },
+    "best_of_4_with_repair": {
+      "n_boards": 100,
+      "solved_pct": 89.0,
+      "cell_pct": 98.33,
+      "valid_pct": 89.0,
+      "format_valid_pct": 100.0,
+      "solved_count": 89,
+      "ci_95": {
+        "p": 89.0,
+        "lower": 81.37,
+        "upper": 93.75,
+        "margin_pp": 6.19
+      },
+      "wall_s": 22.977,
+      "wilson_95ci": {
+        "p": 89.0,
+        "lower": 81.37,
+        "upper": 93.75,
+        "margin_pp": 6.19
+      }
+    }
+  }
+}

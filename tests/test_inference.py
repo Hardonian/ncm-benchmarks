@@ -120,3 +120,45 @@ def test_decode_logits_to_texts_strips_eos_and_pad():
     }
     texts = decode_logits_to_texts(logits, bundle)
     assert texts == ["hello world", "hello ! world"]
+
+
+def test_verify_file_integrity_strict_mode_fails_when_missing(tmp_path: Path):
+    weights = tmp_path / "artifacts" / "unlisted.pt"
+    weights.parent.mkdir(parents=True)
+    weights.write_bytes(b"payload")
+    with pytest.raises(RuntimeError, match="SHA256SUMS missing"):
+        verify_file_integrity(weights, root_dir=tmp_path, strict=True)
+
+    (tmp_path / "SHA256SUMS").write_text("", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="SHA256SUMS"):
+        verify_file_integrity(weights, root_dir=tmp_path, strict=True)
+
+
+def test_repair_sudoku_board_fixes_single_missing_cell_and_preserves_clues():
+    from unittest.mock import patch
+
+    from ncm_bench.inference import repair_sudoku_board, solve_sudoku
+
+    valid_81 = (
+        "534678912"
+        "672195348"
+        "198342567"
+        "859761423"
+        "426853791"
+        "713924856"
+        "961537284"
+        "287419635"
+        "345286179"
+    )
+    clue = "0" + valid_81[1:]
+    corrupted_pred = "9" + valid_81[1:]
+    repaired = repair_sudoku_board(clue, corrupted_pred)
+    assert repaired == valid_81
+    assert is_valid_sudoku_board(repaired)
+
+    with patch("ncm_bench.inference.summarize_texts", return_value=[corrupted_pred]):
+        res = solve_sudoku({"device": "cpu"}, [clue], best_of_k=2, repair=True)
+        assert len(res) == 1
+        assert res[0]["valid"] is True
+        assert res[0]["cells"] == valid_81
+

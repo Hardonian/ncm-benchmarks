@@ -1,0 +1,7 @@
+apiVersion: v2
+name: ncm-summarizer
+description: Air-gapped Next-Concept Modeling sovereign document intelligence service
+type: application
+version: 0.1.0
+appVersion: "2.2.0"
+
