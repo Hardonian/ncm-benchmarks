@@ -7,6 +7,7 @@ import json
 import os
 import sqlite3
 import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -183,45 +184,159 @@ class AuditSinkSQLite:
         return True
 
 
+class KeyManagementProvider:
+    """Base interface for pluggable keyrings, environment KMS, and external KMS/HSM DEK wrappers."""
+
+    uses_dek_wrapping: bool = False
+    active_key_id: str = "default"
+
+    def get_encryption_key(self, key_id: str | None = None) -> tuple[str, str | bytes]:
+        raise NotImplementedError
+
+    def wrap_dek(self, dek: bytes, key_id: str) -> bytes:
+        raise NotImplementedError
+
+    def unwrap_dek(self, wrapped_dek: bytes, key_id: str) -> bytes:
+        raise NotImplementedError
+
+
+class LocalKeyringProvider(KeyManagementProvider):
+    """In-memory versioned keyring provider for offline symmetric key rotation."""
+
+    def __init__(self, keys: Mapping[str, str | bytes], active_key_id: str | None = None) -> None:
+        if not keys:
+            raise ValueError("LocalKeyringProvider requires at least one key entry")
+        self._keys = {str(k): v for k, v in keys.items()}
+        if active_key_id is not None:
+            if active_key_id not in self._keys:
+                raise ValueError(f"Unknown active_key_id: {active_key_id}")
+            self.active_key_id = active_key_id
+        elif "default" in self._keys:
+            self.active_key_id = "default"
+        else:
+            self.active_key_id = list(self._keys.keys())[-1]
+
+    def get_encryption_key(self, key_id: str | None = None) -> tuple[str, str | bytes]:
+        kid = self.active_key_id if key_id is None else str(key_id)
+        if kid not in self._keys:
+            raise ValueError(f"Unknown key_id: {kid}")
+        return kid, self._keys[kid]
+
+
+class EnvKMSProvider(KeyManagementProvider):
+    """Resolves envelope keys from environment variables or Kubernetes/Docker mounted secret files."""
+
+    def __init__(
+        self,
+        prefix: str = "NCM_KMS_KEY_",
+        secrets_dir: Path | str | None = None,
+        active_key_id: str = "default",
+    ) -> None:
+        self.prefix = prefix
+        self.secrets_dir = Path(secrets_dir).resolve() if secrets_dir is not None else None
+        self.active_key_id = active_key_id
+
+    def get_encryption_key(self, key_id: str | None = None) -> tuple[str, str | bytes]:
+        kid = self.active_key_id if key_id is None else str(key_id)
+        env_val = os.environ.get(f"{self.prefix}{kid.upper()}")
+        if env_val is None:
+            env_val = os.environ.get(f"{self.prefix}{kid}")
+        if env_val is not None:
+            return kid, env_val
+        if self.secrets_dir is not None:
+            candidate = (self.secrets_dir / kid).resolve()
+            if self.secrets_dir in candidate.parents and candidate.is_file():
+                return kid, candidate.read_bytes().strip()
+        raise ValueError(f"Unknown key_id: {kid}")
+
+
+class ExternalKMSHookProvider(KeyManagementProvider):
+    """Envelope-encryption KMS/Vault bridge wrapping per-record 32-byte DEKs via external hooks."""
+
+    uses_dek_wrapping: bool = True
+
+    def __init__(
+        self,
+        wrap_fn: Callable[[bytes, str], bytes],
+        unwrap_fn: Callable[[bytes, str], bytes],
+        key_id: str = "kms-primary",
+    ) -> None:
+        self._wrap_fn = wrap_fn
+        self._unwrap_fn = unwrap_fn
+        self.active_key_id = str(key_id)
+
+    def wrap_dek(self, dek: bytes, key_id: str) -> bytes:
+        return bytes(self._wrap_fn(dek, key_id))
+
+    def unwrap_dek(self, wrapped_dek: bytes, key_id: str) -> bytes:
+        return bytes(self._unwrap_fn(wrapped_dek, key_id))
+
+
 def _derive_stream_and_mac_keys(key_bytes: bytes, nonce: bytes, length: int) -> tuple[bytes, bytes]:
     dk = hashlib.pbkdf2_hmac("sha256", key_bytes, nonce, 10_000, dklen=length + 32)
     return dk[:length], dk[length:]
 
 
-def _resolve_envelope_key(key: str | bytes | dict[str, str | bytes], key_id: str) -> bytes:
-    if isinstance(key, dict):
+def _resolve_decrypt_key(
+    envelope: Mapping[str, Any],
+    key: str | bytes | Mapping[str, str | bytes] | KeyManagementProvider,
+    key_id: str,
+) -> bytes:
+    if "wrapped_dek" in envelope:
+        if not isinstance(key, KeyManagementProvider) or not key.uses_dek_wrapping:
+            raise ValueError("Envelope requires a KMS provider supporting unwrap_dek")
+        return key.unwrap_dek(bytes.fromhex(str(envelope["wrapped_dek"])), key_id)
+    if isinstance(key, KeyManagementProvider):
+        _, raw = key.get_encryption_key(key_id)
+        return raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+    if isinstance(key, Mapping):
         if key_id not in key:
             raise ValueError(f"Unknown key_id: {key_id}")
         raw = key[key_id]
-    else:
-        raw = key
-    return raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+        return raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+    return key.encode("utf-8") if isinstance(key, str) else bytes(key)
 
 
 def encrypt_field_envelope(
     plaintext: str,
-    key: str | bytes,
+    key: str | bytes | Mapping[str, str | bytes] | KeyManagementProvider,
     *,
-    key_id: str = "default",
+    key_id: str | None = None,
 ) -> dict[str, str]:
     """Encrypts and authenticates sensitive text using AES-256-GCM AEAD (or PBKDF2-HMAC fallback)."""
     pt_bytes = plaintext.encode("utf-8")
-    key_bytes = key.encode("utf-8") if isinstance(key, str) else bytes(key)
+    extra_fields: dict[str, str] = {}
+    if isinstance(key, KeyManagementProvider):
+        if key.uses_dek_wrapping:
+            resolved_key_id = key.active_key_id if key_id is None else str(key_id)
+            key_bytes = os.urandom(32)
+            extra_fields["wrapped_dek"] = key.wrap_dek(key_bytes, resolved_key_id).hex()
+        else:
+            resolved_key_id, raw = key.get_encryption_key(key_id)
+            key_bytes = raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+    elif isinstance(key, Mapping):
+        resolved_key_id, raw = LocalKeyringProvider(key).get_encryption_key(key_id)
+        key_bytes = raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+    else:
+        resolved_key_id = "default" if key_id is None else str(key_id)
+        key_bytes = key.encode("utf-8") if isinstance(key, str) else bytes(key)
+
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
         salt = os.urandom(16)
         nonce = os.urandom(12)
         aes_key = hashlib.pbkdf2_hmac("sha256", key_bytes, salt, 100_000, dklen=32)
-        sealed = AESGCM(aes_key).encrypt(nonce, pt_bytes, key_id.encode("utf-8"))
+        sealed = AESGCM(aes_key).encrypt(nonce, pt_bytes, resolved_key_id.encode("utf-8"))
         ct_body, gcm_tag = sealed[:-16], sealed[-16:]
         return {
             "alg": "AES-256-GCM",
-            "key_id": key_id,
+            "key_id": resolved_key_id,
             "salt": salt.hex(),
             "nonce": nonce.hex(),
             "ciphertext": ct_body.hex(),
             "tag": gcm_tag.hex(),
+            **extra_fields,
         }
     except ImportError:
         nonce = os.urandom(16)
@@ -230,20 +345,21 @@ def encrypt_field_envelope(
         tag = hmac.new(mac_key, nonce + ct_bytes, hashlib.sha256).hexdigest()
         return {
             "alg": "PBKDF2-SHA256-HMAC",
-            "key_id": key_id,
+            "key_id": resolved_key_id,
             "nonce": nonce.hex(),
             "ciphertext": ct_bytes.hex(),
             "tag": tag,
+            **extra_fields,
         }
 
 
 def decrypt_field_envelope(
     envelope: dict[str, str],
-    key: str | bytes | dict[str, str | bytes],
+    key: str | bytes | Mapping[str, str | bytes] | KeyManagementProvider,
 ) -> str:
-    """Verifies envelope integrity before decrypting field ciphertext (supports key rings & legacy fallback)."""
+    """Verifies envelope integrity before decrypting field ciphertext (supports keyrings & KMS providers)."""
     key_id = str(envelope.get("key_id", "default"))
-    key_bytes = _resolve_envelope_key(key, key_id)
+    key_bytes = _resolve_decrypt_key(envelope, key, key_id)
     alg = str(envelope.get("alg", "PBKDF2-SHA256-HMAC"))
 
     if alg == "AES-256-GCM":

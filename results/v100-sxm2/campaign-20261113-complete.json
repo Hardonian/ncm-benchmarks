@@ -1,0 +1,77 @@
+{
+  "schema": "ncm-campaign-consolidated-v1",
+  "status": "consolidated from verified Tesla V100-SXM2-16GB receipts",
+  "gpu": "Tesla V100-SXM2-16GB",
+  "source_receipts": [
+    "results/v100-sxm2/results.json",
+    "results/v100-sxm2/xsum_batch_sweep.json",
+    "results/v100-sxm2/sudoku_multi_tier.json",
+    "results/v100-sxm2/wmt14_full_bleu.json",
+    "results/v100-sxm2/lm1b_small_fp32_bs1.json",
+    "results/v100-sxm2/xsum_longdoc.json",
+    "results/v100-sxm2/xsum_mbr_k4.json",
+    "results/v100-sxm2/xsum_mbr_k8.json",
+    "results/v100-sxm2/frontier-full-20261113.json"
+  ],
+  "runs": {
+    "xsum_full_11334": {
+      "n": 11334,
+      "batch_size": 32,
+      "wall_s_incl_load": 1241.0,
+      "rouge1": 34.92,
+      "rouge2": 12.71,
+      "rougeL": 27.93,
+      "avg_words": 20.7,
+      "full_census_throughput_docs_s_bs32": 9.13
+    },
+    "xsum_batch_sweep": {
+      "optimal_batch_size": 64,
+      "sweep": [
+        {"batch_size": 1, "marginal_s_per_doc": 0.049, "items_per_min": 1221.3},
+        {"batch_size": 8, "marginal_s_per_doc": 0.024, "items_per_min": 2461.0},
+        {"batch_size": 16, "marginal_s_per_doc": 0.027, "items_per_min": 2236.4},
+        {"batch_size": 32, "marginal_s_per_doc": 0.024, "items_per_min": 2536.3},
+        {"batch_size": 64, "marginal_s_per_doc": 0.022, "items_per_min": 2728.5}
+      ]
+    },
+    "sudoku_hard_greedy_full_2000": {
+      "n": 2000,
+      "batch_size": 128,
+      "wall_s_incl_load": 26.026,
+      "solved_pct": 86.3,
+      "solved": "1726/2000",
+      "cell_pct": 98.35
+    },
+    "sudoku_multi_tier_bok4_repair": {
+      "best_of_k": 4,
+      "repair": true,
+      "batch_size": 16,
+      "easy": {"solved_pct": 99.8, "solved_count": 1996, "n_boards": 2000, "wall_s": 20.613, "boards_per_sec": 97.03},
+      "medium": {"solved_pct": 98.55, "solved_count": 1971, "n_boards": 2000, "wall_s": 25.716, "boards_per_sec": 77.77},
+      "hard": {"solved_pct": 90.7, "solved_count": 1814, "n_boards": 2000, "wall_s": 41.498, "boards_per_sec": 48.2}
+    },
+    "wmt14_full_3003": {
+      "n_sentences": 3003,
+      "batch_size": 32,
+      "elapsed_s": 85.4,
+      "sentences_per_sec": 35.16,
+      "bleu_score": 21.72
+    },
+    "lm1b_small_fp32_bs1": {
+      "model_load_s": 5.366,
+      "marginal_s_per_doc": 0.09,
+      "items_per_min": 664.1,
+      "batch_size": 1
+    },
+    "frontier_cuda_training_smoke": {
+      "source_commit": "d9550197e6f97ba46f0fbcee23b5140d64b701de",
+      "distill_smoke": {"samples": 256, "steps": 100, "initial_loss": 7.4577, "final_loss": 2.3542, "elapsed_seconds": 6.484},
+      "rl_smoke": {"samples": 256, "steps": 100, "group_size": 8, "initial_reward": 0.5723, "final_reward": 0.6211, "delta_reward": 0.0488, "elapsed_seconds": 7.419},
+      "telemetry": {"max_temperature_c": 47, "min_free_mib": 6301, "samples": 37}
+    }
+  },
+  "remaining_optional_remote_runs": [
+    "early-exit-bench --device cuda",
+    "compare --device cuda"
+  ]
+}

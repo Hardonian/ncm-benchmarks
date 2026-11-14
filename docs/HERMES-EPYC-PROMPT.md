@@ -120,6 +120,9 @@ mkdir -p results/v100-sxm2 results/epyc-cpu
    # Teacher-student concept KL distillation on V100
    $CLI distill-smoke --samples 256 --steps 100 --device cuda --out-dir artifacts/distill_v100 \
      | tee results/v100-sxm2/distill_v100.json
+
+   # Head-to-head NCM vs AR / Symbolic / Extractive comparison on V100 CUDA
+   $CLI compare --n-sudoku 50 --n-xsum 24 --device cuda --output-file results/v100-sxm2/ncm_vs_baselines_cuda.json
    ```
 
 ---

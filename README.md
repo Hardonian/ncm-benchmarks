@@ -4,7 +4,7 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/ncm-benchmarks.svg)](https://pypi.org/project/ncm-benchmarks/)
 [![CI Status](https://github.com/Hardonian/ncm-benchmarks/actions/workflows/ci.yml/badge.svg)](https://github.com/Hardonian/ncm-benchmarks/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v2.2.0-green.svg)](https://github.com/Hardonian/ncm-benchmarks/releases)
+[![Release](https://img.shields.io/badge/release-v3.0.0-green.svg)](https://github.com/Hardonian/ncm-benchmarks/releases)
 [![Zero Pickle](https://img.shields.io/badge/security-zero--pickle%20safetensors-purple.svg)](https://github.com/Hardonian/ncm-benchmarks)
 
 > **"Next-Concept Modeling proves that the industry's default reliance on 70B cloud autoregressive LLMs for basic document classification and triage is an inefficient legacy pattern.**
@@ -42,7 +42,7 @@ All figures measured and recorded in [`results/`](results/) across a consumer **
 | **Sudoku-Hard Reasoning** (2,000 boards) | 86.1% solved (Paper H100) | **`86.30%`** solved on V100<br>**`91.0%`** on CPU with Best-of-4 + Repair | **+7.0 pp breakthrough** over greedy baselines via bounded constraint search. |
 | **Zero-Pickle Safetensors + INT8** | FP32 Python Pickles (untrusted code) | **`1.68x` CPU Speedup** (`33.26s` vs `55.93s`) at **-0.24 pp R-L** | Strict SHA-256 weight integrity, air-gapped security, sub-second latency. |
 | **Consensus Decoding (MBR $N=4$)** | Greedy single-shot draft | **+1.82 ROUGE-L** (`25.26 → 27.08`)<br>+2.54 ROUGE-1 | Minimum Bayes Risk draft-selection beats single pass without retraining. |
-| **Coarse Early-Exit (`L0..L2`)** | Full `L0..L8` generation | **`3.38x` CPU Speedup** (`356.02 ms` vs `1205.13 ms/doc`) | Skip fine levels for rapid routing, deduplication &amp; schema triage (`results/hx370-cpu/frontier_checks.json`). |
+| **Coarse Early-Exit (`L0..L2`)** | Full `L0..L8` generation | **`3.25x` CPU Speedup** (`453.61 ms` vs `1475.79 ms/doc`) | Skip fine levels for rapid routing, deduplication &amp; schema triage (`results/hx370-cpu/frontier_checks.json`). |
 | **Marginal Unit Economics** | Cloud APIs: $0.003–$0.02 / doc | **`$0.0000` Marginal Cost** on existing hardware | **Zero per-token billing**, zero third-party data egress, zero GPU cluster requirements. |
 
 ---
@@ -112,8 +112,8 @@ NCM's discrete code generation excels at structured reasoning. By pairing NCM pa
 While upstream releases provided inference-only evaluation, `ncm-benchmarks` delivers clean-room training, alignment, and distillation implementations:
 
 - **Stage-1 & Stage-2 Pretraining**: Multiscale Residual VQ-VAE + Next-Concept Transformer (`194.08 → 3.79` Stage-1 loss in 40 steps via `ncm-bench train-smoke`).
-- **Discrete Concept-Space GRPO / RLVR & DPO** ([`ncm_train/rl_distill.py`](ncm_train/rl_distill.py)): Group Relative Policy Optimization (`+0.0938` reward delta `0.5820 → 0.6758` in 24 CPU steps via `ncm-bench rl-smoke`) plus clean-room Concept-Space Direct Preference Optimization (`DPOConfig`, `train_stage2_dpo`).
-- **Teacher-Student Concept Distillation**: KL-guided distillation in hierarchical concept space (`9.398 → 6.3534` loss in 20 CPU steps via `ncm-bench distill-smoke`).
+- **Discrete Concept-Space GRPO / RLVR & DPO** ([`ncm_train/rl_distill.py`](ncm_train/rl_distill.py)): Group Relative Policy Optimization (`+0.1055` reward delta `0.5879 → 0.6934` in 24 CPU steps via `ncm-bench rl-smoke`) plus clean-room Concept-Space Direct Preference Optimization (`DPOConfig`, `train_stage2_dpo`).
+- **Teacher-Student Concept Distillation**: KL-guided distillation in hierarchical concept space (`9.3695 → 6.3365` loss in 20 CPU steps via `ncm-bench distill-smoke`).
 
 ### 🔬 Interactive Progressive Visualizer & Early-Exit Triage
 
@@ -158,8 +158,8 @@ python scripts/batch_triage.py --input raw_docs.jsonl --output triaged.jsonl --e
 | :--- | :--- | :--- | :--- | :--- |
 | **Ryzen AI 9 HX 370 (CPU)** | XSum (FP32) | `2.34 s/doc` (marginal) | `27.89` ROUGE-L | [`results/hx370-cpu/`](results/hx370-cpu/) |
 | **Ryzen AI 9 HX 370 (CPU)** | XSum (INT8 Quantized) | `1.04 s/doc` (**1.68x speedup**) | `27.65` ROUGE-L | [`results/hx370-cpu/`](results/hx370-cpu/) |
-| **Ryzen AI 9 HX 370 (CPU)** | XSum Early-Exit (`L0..L2`, INT8) | **`356.02 ms/doc`** (`3.38x` vs `L0..L8`) | `3/9` concept passes | [`results/hx370-cpu/frontier_checks.json`](results/hx370-cpu/frontier_checks.json) |
-| **Ryzen AI 9 HX 370 (CPU)** | Concept GRPO / RLVR (24 steps) | Tiny clean-room smoke | **`+0.0938`** reward (`0.582→0.676`) | [`results/hx370-cpu/frontier_checks.json`](results/hx370-cpu/frontier_checks.json) |
+| **Ryzen AI 9 HX 370 (CPU)** | XSum Early-Exit (`L0..L2`, INT8) | **`453.61 ms/doc`** (`3.25x` vs `L0..L8`) | `3/9` concept passes | [`results/hx370-cpu/frontier_checks.json`](results/hx370-cpu/frontier_checks.json) |
+| **Ryzen AI 9 HX 370 (CPU)** | Concept GRPO / RLVR (24 steps) | Tiny clean-room smoke | **`+0.1055`** reward (`0.588→0.693`) | [`results/hx370-cpu/frontier_checks.json`](results/hx370-cpu/frontier_checks.json) |
 | **Ryzen AI 9 HX 370 (CPU)** | Sudoku-Hard (Greedy) | `18.93 s` (100 boards) | 84.0% solved | [`results/hx370-cpu/`](results/hx370-cpu/) |
 | **Ryzen AI 9 HX 370 (CPU)** | Sudoku-Hard (Best-of-4 + Repair) | `26.46 s` (100 boards) | **91.0% solved** | [`results/hx370-cpu/`](results/hx370-cpu/) |
 | **Tesla V100-SXM2 (16GB)** | XSum Full Census (11,334 docs) | **`9.47 docs/sec`** (`0.097 s/doc`) | `27.93` ROUGE-L | [`results/v100-sxm2/`](results/v100-sxm2/) |
@@ -167,9 +167,9 @@ python scripts/batch_triage.py --input raw_docs.jsonl --output triaged.jsonl --e
 | **Tesla V100-SXM2 (16GB)** | WMT14 En-De Full (`3,003` sent, `bs=32`) | **`35.16 sent/sec`** (`85.4 s` wall) | **`21.72` BLEU** | [`results/v100-sxm2/wmt14_full_bleu.json`](results/v100-sxm2/wmt14_full_bleu.json) |
 | **Tesla V100-SXM2 (16GB)** | Sudoku-Hard Full Test (2,000 boards)| **`76.9 boards/sec`** (`26.0 s` wall) | **86.30% solved** | [`results/v100-sxm2/`](results/v100-sxm2/) |
 | **Tesla V100-SXM2 (16GB)** | Sudoku Multi-Tier (6,000 boards, Best-of-4 + Repair) | **`97.03 / 77.77 / 48.2 boards/s`** | **99.8% / 98.55% / 90.7%** | [`results/v100-sxm2/sudoku_multi_tier.json`](results/v100-sxm2/sudoku_multi_tier.json) |
-| **Ryzen AI 9 HX 370 (CPU)** | NCM vs AR / Symbolic / Extractive (`ncm-bench compare`) | **`12.24x` @ 128 tok** (`3.88` vs `47.52 ms`) | **Sudoku `86%` vs `0%` AR/`64%` BT; XSum `28.74` vs `12.97` TF-IDF** | [`results/hx370-cpu/ncm_vs_baselines.json`](results/hx370-cpu/ncm_vs_baselines.json) |
+| **Ryzen AI 9 HX 370 (CPU)** | NCM vs AR / Symbolic / Extractive (`ncm-bench compare`) | **`13.04x` @ 128 tok** (`4.70` vs `61.23 ms`) | **Sudoku `86%` vs `0%` AR/`64%` BT; XSum `28.74` vs `12.97` TF-IDF** | [`results/hx370-cpu/ncm_vs_baselines.json`](results/hx370-cpu/ncm_vs_baselines.json) |
 
-> **Honest Engineering Note**: Sub-second single-shot summarization does not hold on laptop CPUs in FP32 (`2.34 s/doc`); dynamic INT8 brings it down to `1.04 s`. CPU batching (`bs=8` vs `bs=1`) yields `-1.9%` because FP32 GEMMs already saturate 16 cores on a single document. On dedicated V100 GPUs, throughput scales linearly to 9.47 docs/sec. Additionally, on micro-scale cold training (`512` samples, `<0.3M` params, `450` steps without pretraining), direct token cross-entropy in `CausalTokenLM` converges faster (`70.83%` vs `25.0%` on Mini-Sudoku 4x4; `68.75%` vs `25.0%` on Dyck-2) than two-stage VQ-VAE + NCM — demonstrating that NCM's advantage scales with pretrained concept codebooks or verifier-guided candidate search ([`docs/NCM-VS-LLM-BENCHMARKS.md`](docs/NCM-VS-LLM-BENCHMARKS.md)).
+> **Honest Engineering Note**: Sub-second single-shot summarization does not hold on laptop CPUs in FP32 (`2.34 s/doc`); dynamic INT8 brings it down to `1.04 s`. CPU batching (`bs=8` vs `bs=1`) yields `-1.9%` because FP32 GEMMs already saturate 16 cores on a single document. On dedicated V100 GPUs, throughput scales linearly to 9.47 docs/sec. Additionally, on micro-scale cold training (`512` samples, `<0.3M` params, `450` steps without pretraining), direct token cross-entropy in `CausalTokenLM` converges faster (`70.83%` vs `35.42%` on Mini-Sudoku 4x4; `68.75%` vs `22.92%` on Dyck-2) than two-stage VQ-VAE + NCM — demonstrating that NCM's advantage scales with pretrained concept codebooks or verifier-guided candidate search ([`docs/NCM-VS-LLM-BENCHMARKS.md`](docs/NCM-VS-LLM-BENCHMARKS.md)).
 
 ---
 
@@ -179,9 +179,10 @@ python scripts/batch_triage.py --input raw_docs.jsonl --output triaged.jsonl --e
   ```bash
   docker compose up -d
   ```
-- **Kubernetes Helm Chart**: Production autoscaling deployment with liveness/readiness probes:
+- **Kubernetes Helm Chart**: Production autoscaling deployment with liveness/readiness probes and egress-deny `NetworkPolicy`:
   ```bash
-  helm install ncm-summarizer deploy/helm/ncm-summarizer/
+  helm install ncm-benchmarks deploy/helm/ncm-benchmarks/
+  # (Or legacy alias: helm install ncm-summarizer deploy/helm/ncm-summarizer/)
   ```
 - **Systemd Service**: Host daemon configuration with memory quotas and watchdog timers:
   ```bash

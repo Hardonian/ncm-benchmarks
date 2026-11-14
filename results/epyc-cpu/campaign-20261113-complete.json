@@ -1,0 +1,107 @@
+{
+  "schema": "ncm-campaign-consolidated-v1",
+  "status": "consolidated from verified EPYC 7452 & EPYC 7543P CPU receipts",
+  "source_receipts": [
+    "results/epyc-cpu/campaign-20261113-partial.json",
+    "results/epyc-cpu/triage-40-20261113.json",
+    "results/epyc-cpu/int8_scaling.json",
+    "results/epyc-cpu/sudoku_hard_fp32.json",
+    "results/epyc-cpu/sudoku_hard_int8.json"
+  ],
+  "source_commits": [
+    "cb6f3b0882cc27a7cc6b8cfa6ee2bcdfdadaf6d6",
+    "e17fa93028da34966409562caeb5d5d35189f1c5"
+  ],
+  "epyc_7452_4_thread_affinity_24_27": {
+    "cpu": "AMD EPYC 7452 32-Core Processor",
+    "cpu_affinity": [24, 25, 26, 27],
+    "numa_memory_node": 0,
+    "threads": 4,
+    "int8_early_exit_n32": {
+      "max_level": 2,
+      "passes_early_exit": 3,
+      "passes_full": 9,
+      "early_exit_per_doc_ms": 1413.93,
+      "early_exit_total_s": 45.2457,
+      "full_decode_per_doc_ms": 4459.11,
+      "full_decode_total_s": 142.6916,
+      "speedup": 3.15
+    },
+    "xsum_bs4_n32": {
+      "fp32": {
+        "marginal_s_per_doc": 5.559,
+        "items_per_min": 10.8,
+        "model_load_s": 5.972,
+        "large_s": 183.857
+      },
+      "int8": {
+        "marginal_s_per_doc": 3.252,
+        "items_per_min": 18.4,
+        "model_load_s": 8.017,
+        "large_s": 112.09
+      }
+    },
+    "triage_server_int8_completed": {
+      "sequential": {
+        "attempted": 40,
+        "http_200": 40,
+        "all_receipt_checks_pass": 40,
+        "latency_mean_seconds": 7.76361,
+        "latency_min_seconds": 7.596235,
+        "latency_max_seconds": 8.349877,
+        "wall_seconds": 310.679047
+      },
+      "concurrent_4_workers": {
+        "attempted": 4,
+        "http_200": 4,
+        "all_receipt_checks_pass": 4,
+        "latency_mean_seconds": 19.098103,
+        "wall_seconds": 30.581095
+      }
+    }
+  },
+  "epyc_7543p_numa0_32_thread_scaling": {
+    "device": "EPYC 7543P (single NUMA node 0, 32 threads)",
+    "xsum_latency_bs1": {
+      "fp32": {
+        "marginal_s_per_doc": 1.411,
+        "items_per_min": 42.5,
+        "model_load_s": 4.826
+      },
+      "int8": {
+        "marginal_s_per_doc": 1.162,
+        "items_per_min": 51.6,
+        "model_load_s": 4.932
+      },
+      "speedup_pct": 21.4
+    },
+    "sudoku_hard_bok4_repair_n2000": {
+      "fp32": {
+        "solved_count": 1813,
+        "n_boards": 2000,
+        "solved_pct": 90.65,
+        "cell_pct": 98.65,
+        "valid_pct": 90.7,
+        "ci_95_margin_pp": 1.28,
+        "wall_s": 366.98,
+        "boards_per_sec": 5.45
+      },
+      "int8": {
+        "solved_count": 1817,
+        "n_boards": 2000,
+        "solved_pct": 90.85,
+        "cell_pct": 98.69,
+        "valid_pct": 90.95,
+        "ci_95_margin_pp": 1.26,
+        "wall_s": 360.508,
+        "boards_per_sec": 5.55
+      },
+      "speedup_pct": 1.8,
+      "accuracy_delta_pp": 0.2
+    }
+  },
+  "notes": [
+    "All numbers above are directly aggregated from committed hardware measurement receipts without modification.",
+    "Continuous sub-second thermal telemetry between scheduled samples remains out of scope for offline CPU logs."
+  ]
+}

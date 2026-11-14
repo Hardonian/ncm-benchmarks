@@ -1,0 +1,13 @@
+{{- if .Values.networkPolicy.denyAllEgress }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-ncm-egress-deny
+spec:
+  podSelector:
+    matchLabels:
+      app: ncm-benchmarks
+  policyTypes:
+    - Egress
+  egress: []
+{{- end }}

@@ -7,6 +7,7 @@ import email
 import hashlib
 import hmac
 import html
+import importlib
 import io
 import os
 import re
@@ -200,8 +201,56 @@ def extract_text_from_file(
     return raw.strip()
 
 
-def redact_pii(text: str, *, ner_fn=None) -> tuple[str, dict[str, str]]:
-    """Replaces PII/PHI/secret spans via regex + optional NER hook with deterministic placeholders."""
+def default_contextual_ner(text: str) -> list[tuple[str, str]]:
+    """Extracts contextual PERSON names, street ADDRESS spans, and API_KEY secrets without external models."""
+    findings: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    person_pat = re.compile(
+        r"(?:Patient|Dr\.|Mr\.|Mrs\.|Ms\.|Attending|Signed by|Prepared for|Claimant|Defendant|Contact)"
+        r":?\s+([A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+){1,2})"
+    )
+    address_pat = re.compile(
+        r"\b\d{1,5}[ \t]+[A-Z][a-zA-Z0-9 \t]{2,25}[ \t]+"
+        r"(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Ln|Lane|Dr|Drive|Way)\b"
+    )
+    secret_pat = re.compile(r"\b(?:sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{16})\b")
+
+    for label, pat, group_idx in (
+        ("PERSON", person_pat, 1),
+        ("ADDRESS", address_pat, 0),
+        ("API_KEY", secret_pat, 0),
+    ):
+        for match in pat.finditer(text):
+            span = match.group(group_idx).strip()
+            item = (label, span)
+            if span and item not in seen:
+                seen.add(item)
+                findings.append(item)
+
+    try:
+        presidio_mod = importlib.import_module("presidio_analyzer")
+        engine = presidio_mod.AnalyzerEngine()
+        for ent in engine.analyze(text=text, language="en", entities=["PERSON", "LOCATION"]):
+            span = text[ent.start : ent.end].strip()
+            lbl = "ADDRESS" if ent.entity_type == "LOCATION" else str(ent.entity_type).upper()
+            item = (lbl, span)
+            if span and item not in seen:
+                seen.add(item)
+                findings.append(item)
+    except Exception:
+        pass
+
+    return findings
+
+
+def redact_pii(
+    text: str,
+    *,
+    ner_fn=None,
+    enable_contextual_ner: bool = False,
+) -> tuple[str, dict[str, str]]:
+    """Replaces PII/PHI/secret spans via regex + optional/built-in NER hook with deterministic placeholders."""
     mapping: dict[str, str] = {}
     counters: dict[str, int] = {}
     scrubbed = text
@@ -217,8 +266,9 @@ def redact_pii(text: str, *, ner_fn=None) -> tuple[str, dict[str, str]]:
 
         scrubbed = pattern.sub(_repl, scrubbed)
 
-    if ner_fn is not None:
-        for raw_label, raw_span in ner_fn(scrubbed):
+    active_ner = ner_fn if ner_fn is not None else (default_contextual_ner if enable_contextual_ner else None)
+    if active_ner is not None:
+        for raw_label, raw_span in active_ner(scrubbed):
             span = str(raw_span)
             lbl = str(raw_label).upper().strip() or "ENTITY"
             if span and span in scrubbed and not span.startswith("["):

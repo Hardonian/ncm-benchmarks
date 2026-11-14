@@ -1,6 +1,6 @@
-# 100-Item Frontier Roadmap (`ncm-benchmarks`) — 100 / 100 Complete (`v2.2.0`)
+# 100-Item Frontier Roadmap & v3.0.0 Release — 100 / 100 Complete (`v3.0.0`)
 
-Comprehensive 10-pillar engineering roadmap tracking all 100 completed capabilities across `v2.0.0`, `v2.1.0`, and `v2.2.0`.
+Comprehensive 10-pillar engineering roadmap tracking all 100 completed capabilities across `v2.0.0`–`v2.2.0` plus `v3.0.0` enterprise productization hardening.
 
 ---
 
@@ -32,7 +32,7 @@ Comprehensive 10-pillar engineering roadmap tracking all 100 completed capabilit
 
 ## Pillar 3: Structured Triage, Early-Exit & Online Learning (21-30)
 
-21. [x] Coarse Level `0..2` early-exit decoding achieving `3.38x` CPU speedup (`356.02 ms` vs `1205.13 ms/doc`)
+21. [x] Coarse Level `0..2` early-exit decoding achieving `3.25x` CPU speedup (`453.61 ms` vs `1475.79 ms/doc`)
 22. [x] `ConceptIndex` deterministic SHA-256 / concept-hash semantic deduplication
 23. [x] Bounded LRU coarse signature cache (`512` entries, `clear_coarse_cache`) (`v2.1.0`)
 24. [x] Zero-shot + centroid `ConceptClassifier` with escalation confidence thresholding
@@ -60,8 +60,8 @@ Comprehensive 10-pillar engineering roadmap tracking all 100 completed capabilit
 
 41. [x] Clean-room Stage-1 Residual VQ-VAE pretraining & commitment loss smoke suite
 42. [x] Clean-room Stage-2 Next-Concept Transformer cross-entropy smoke trainer
-43. [x] Discrete Concept-Space GRPO / RLVR (`+0.0938` reward delta in 24 CPU steps)
-44. [x] KL-guided Teacher-Student Concept Distillation (`9.398 -> 6.3534` loss in 20 CPU steps)
+43. [x] Discrete Concept-Space GRPO / RLVR (`+0.1055` reward delta `0.5879 -> 0.6934` in 24 CPU steps)
+44. [x] KL-guided Teacher-Student Concept Distillation (`9.3695 -> 6.3365` loss in 20 CPU steps)
 45. [x] Discrete Concept-Space Direct Preference Optimization (`DPOConfig`, `train_stage2_dpo`) (`v2.1.0`)
 46. [x] Tensor device-alignment fix for CUDA / V100 GRPO rollouts (`e17fa93`)
 47. [x] Multi-GPU DDP / FSDP distributed training wrapper (`DDPConfig`, `wrap_model_distributed`, `ncm_train/adapters.py`, `v2.2.0`)
@@ -136,13 +136,14 @@ Comprehensive 10-pillar engineering roadmap tracking all 100 completed capabilit
 
 ---
 
-## v3.0 Enterprise Productization Hardening (Completed)
+## v3.0.0 Enterprise Productization Hardening (Completed)
 
-Building on the `v2.2.0` 100-item foundation, `v3.0` hardens core security, persistence, training depth, and runtime kernels for sovereign multi-tenant deployment:
+Building on the `v2.2.0` 100-item foundation, `v3.0.0` hardens security, persistence, training depth, packaging, and runtime kernels for sovereign multi-tenant deployment:
 
 - **Trainer Hardening & Safe Checkpointing (`ncm_train/vqvae_trainer.py`, `ncm_train/ncm_trainer.py`)**: Restored `ema_decay` & `dropout` configuration, added `grad_clip`, `lr_schedule`, `grad_accum_steps`, `resume_from` checkpoint recovery, and native `.safetensors` serialization.
 - **Deep Recursive LoRA (`ncm_train/adapters.py`)**: Recursive `inject_concept_lora` across nested Transformer `nn.Linear` submodules with optional `target_modules` filter plus compact `extract_lora_state_dict` / `load_lora_state_dict` serialization.
-- **AEAD Encryption & WAL SQLite Audit (`ncm_bench/compliance.py`)**: Upgraded field-level envelopes to `AES-256-GCM` with `key_id` rotation lookup (`PBKDF2-SHA256-HMAC` backward compatibility preserved) and enabled `WAL` journal mode, `busy_timeout=5000`, and streaming batched `fetchmany` chain verification in `AuditSinkSQLite`.
-- **Decompression Quota & Table-Aware Ingestion (`ncm_bench/longdoc.py`)**: Enforced `max_archive_bytes` zip-bomb guards on `.docx`/`.xlsx`, preserved row/table structure, added `MRN` scrubbing + `ner_fn` contextual redaction hook, and added NVML/RAPL hardware telemetry detection in `ncm_bench/frontier.py`.
-- **Persistent Hybrid Triage & Async Coalescing (`ncm_bench/triage.py`, `service/summarize_server.py`, `service/transport.py`)**: Added JSON persistence (`save`/`load` & `triage_state_path` / `NCM_TRIAGE_STATE_PATH`) for `/triage/feedback`, lexical + concept hybrid scoring in `ConceptClassifier.predict_one`, and time-windowed `DynamicBatchCoalescer.submit()` / `process_async()`.
-- **INT4 Drop-in Linear & Stateful JSON Grammar FSM (`ncm_bench/accel.py`, `ncm_bench/reasoning.py`, `ncm_bench/inference.py`)**: Added recursive `Int4Linear` + `quantize_model_int4`, `torchao`-ready `_apply_dynamic_int8` (suppressing noisy `torch.ao` warnings), and multi-step `JSONGrammarStateMachine`.
+- **AEAD Encryption, Pluggable KMS & WAL SQLite Audit (`ncm_bench/compliance.py`)**: Upgraded field-level envelopes to `AES-256-GCM` with `key_id` rotation, `LocalKeyringProvider`, `EnvKMSProvider`, and `ExternalKMSHookProvider` DEK wrapping, plus `WAL` journal mode, `busy_timeout=5000`, and streaming batched `fetchmany` chain verification in `AuditSinkSQLite`.
+- **Decompression Quota, Contextual NER & Table Ingestion (`ncm_bench/longdoc.py`)**: Enforced `max_archive_bytes` zip-bomb guards on `.docx`/`.xlsx`, preserved row/table structure, added `MRN` scrubbing, `default_contextual_ner()` (`PERSON`, `ADDRESS`, `API_KEY` + optional `presidio_analyzer`), and NVML/RAPL telemetry detection in `ncm_bench/frontier.py`.
+- **Persistent Hybrid Triage, SQLite WAL Store & Async Coalescing (`ncm_bench/triage.py`, `service/summarize_server.py`, `service/transport.py`)**: Added JSON & WAL-mode `SQLiteClassifierStore` persistence (`save`/`load` & `NCM_TRIAGE_STATE_PATH`) for `/triage/feedback`, lexical + concept hybrid scoring (`text_hint`, raising paraphrased triage top-1 from `41.67%` to `58.33%`), and time-windowed `DynamicBatchCoalescer.submit()` / `process_async()`.
+- **LUT-Accelerated INT4 Linear & Stateful JSON Grammar FSM (`ncm_bench/accel.py`, `ncm_bench/reasoning.py`, `ncm_bench/inference.py`)**: Added vectorized LUT-based `Int4Linear` (`from_linear`, optional `cache_dequantized`), `quantize_model_int4`, `torchao`-ready `_apply_dynamic_int8`, ROCm/driver CPU fallback in `probe_accelerator_capabilities()`, and multi-step `JSONGrammarStateMachine`.
+- **Consolidated EPYC/V100 Receipts & Full Helm/PyPI `v3.0.0` Packaging**: Consolidated multi-run receipts in `results/epyc-cpu/campaign-20261113-complete.json` & `results/v100-sxm2/campaign-20261113-complete.json`, added complete Helm templates for `deploy/helm/ncm-benchmarks/`, synced `cryptography>=42.0.0` optional extras, and enabled `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` across workflows.

@@ -5,6 +5,8 @@ import hashlib
 import json
 import math
 import re
+import sqlite3
+import time
 from collections import Counter, OrderedDict
 from pathlib import Path
 from typing import Any
@@ -476,15 +478,23 @@ class ConceptClassifier:
         return clf
 
     def save(self, path: str | Path) -> None:
-        """Writes persisted classifier state atomically to UTF-8 JSON."""
+        """Writes persisted classifier state atomically to UTF-8 JSON or SQLite WAL store."""
         target = Path(path)
+        if target.suffix.lower() in {".db", ".sqlite"}:
+            SQLiteClassifierStore(target).save(self)
+            return
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
 
     @classmethod
     def load(cls, path: str | Path) -> "ConceptClassifier":
-        """Loads a ConceptClassifier from disk."""
-        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+        """Loads a ConceptClassifier from a JSON file or SQLite WAL store."""
+        target = Path(path)
+        if target.suffix.lower() in {".db", ".sqlite"}:
+            if not target.exists():
+                raise FileNotFoundError(f"Classifier state store not found: {target}")
+            return SQLiteClassifierStore(target).load()
+        return cls.from_dict(json.loads(target.read_text(encoding="utf-8")))
 
     def _unit_hist(self, hist: dict[int, float]) -> dict[int, float]:
         norm = math.sqrt(sum(v * v for v in hist.values()))
@@ -535,6 +545,51 @@ class ConceptClassifier:
             "alpha": alpha,
             "multi_label": len(pset) > 1,
         }
+
+
+class SQLiteClassifierStore:
+    """Multi-worker WAL-mode SQLite persistence store for ConceptClassifier centroids and thresholds."""
+
+    def __init__(self, db_path: Path | str) -> None:
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.db_path, timeout=5.0) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+            conn.execute("PRAGMA busy_timeout=5000;")
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS classifier_state ("
+                "id TEXT PRIMARY KEY, "
+                "payload_json TEXT NOT NULL, "
+                "updated_at REAL NOT NULL)"
+            )
+            conn.commit()
+
+    def save(self, clf: ConceptClassifier, state_id: str = "default") -> None:
+        """Atomically upserts serialized ConceptClassifier state into the WAL-mode SQLite store."""
+        payload = json.dumps(clf.to_dict(), sort_keys=True)
+        with sqlite3.connect(self.db_path, timeout=5.0) as conn:
+            conn.execute("PRAGMA busy_timeout=5000;")
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                "INSERT INTO classifier_state (id, payload_json, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET payload_json = excluded.payload_json, "
+                "updated_at = excluded.updated_at",
+                (str(state_id), payload, time.time()),
+            )
+            conn.commit()
+
+    def load(self, state_id: str = "default") -> ConceptClassifier:
+        """Loads persisted ConceptClassifier state by state_id (returns empty classifier if unseeded)."""
+        with sqlite3.connect(self.db_path, timeout=5.0) as conn:
+            conn.execute("PRAGMA busy_timeout=5000;")
+            row = conn.execute(
+                "SELECT payload_json FROM classifier_state WHERE id = ?",
+                (str(state_id),),
+            ).fetchone()
+        if row is None:
+            return ConceptClassifier()
+        return ConceptClassifier.from_dict(json.loads(str(row[0])))
 
 
 def _heuristic_route(text: str, *, labels: list[str] | None = None, escalation_threshold: float = 0.45) -> dict[str, Any]:

@@ -2,6 +2,23 @@
 
 All notable changes to `ncm-benchmarks` are documented in this file.
 
+## [3.0.0] - 2026-11-14
+
+### Added & Hardened
+- **LUT-Accelerated `Int4Linear` (`ncm_bench/accel.py`)**: Replaced slice mutation bitshifts with a vectorized `(256, 2)` int8 nibble lookup table (`_build_nibble_lut`), added `Int4Linear.from_linear(..., cache_dequantized=...)`, and hardened `probe_accelerator_capabilities()` to gracefully fall back to CPU if an accelerator driver fails.
+- **Pluggable KMS & WAL SQLite Compliance (`ncm_bench/compliance.py`)**: Added `KeyManagementProvider`, `LocalKeyringProvider`, `EnvKMSProvider`, and `ExternalKMSHookProvider` (DEK envelope wrapping) on top of `AES-256-GCM` key rotation, `WAL`-mode `AuditSinkSQLite`, and batched `verify_chain(batch_size=...)`.
+- **Multi-Worker `SQLiteClassifierStore` & Hybrid Triage (`ncm_bench/triage.py`, `service/summarize_server.py`)**: Added atomic `WAL`-mode `SQLiteClassifierStore` (auto-selected for `.db`/`.sqlite` `NCM_TRIAGE_STATE_PATH`), JSON persistence for `/triage/feedback`, async time-windowed `DynamicBatchCoalescer`, and hybrid lexical+concept scoring (`+16.66 pp` to `58.33%` top-1 on paraphrased triage).
+- **Archive Quota, Table Ingestion & Built-In Contextual NER (`ncm_bench/longdoc.py`)**: Added `max_archive_bytes` zip-bomb checks, `.docx` `<w:tbl>` & `.xlsx` sharedStrings extraction, `MRN` scrubbing, and `default_contextual_ner()` (`PERSON`, `ADDRESS`, `API_KEY` + optional `presidio_analyzer`).
+- **Trainer Resumption & Deep Recursive LoRA (`ncm_train/`)**: Restored `ema_decay` & `dropout`, added `grad_clip`, `lr_schedule`, `grad_accum_steps`, `resume_from`, `.safetensors` serialization, recursive `inject_concept_lora`, and `extract_lora_state_dict` / `load_lora_state_dict`.
+- **Head-to-Head NCM vs. AR/Symbolic Arena (`ncm_bench/compare.py`, `results/hx370-cpu/ncm_vs_baselines.json`)**: Recorded `13.04x` CPU latency speedup at `128` tokens (`4.70 ms` vs `61.23 ms`), `86.0%` vs `0.0%` 81-step AR / `64.0%` backtrack on Sudoku-Hard (`n=50`), `28.74` vs `12.97` TF-IDF ROUGE-L on XSum (`n=24`), and consolidated EPYC/V100 campaign receipts (`campaign-20261113-complete.json`).
+- **Full Helm Chart & Release Packaging (`deploy/helm/ncm-benchmarks/`, `pyproject.toml`)**: Added complete Kubernetes Helm templates (`deployment.yaml`, `service.yaml`, `hpa.yaml`, `networkpolicy.yaml`), synced `cryptography>=42.0.0` optional extras, and bumped all charts, server API, and package metadata to `3.0.0`.
+
+## [2.2.0] - 2026-11-13
+- Completed all 100 items across all 10 pillars in `docs/ROADMAP-100.md` (Detached Ed25519/Schnorr receipts, Merkle evidence bundles, JSON grammar FSM, DPLL constraint solver, ONNX manifests, AsyncNCMClient, TypeScript SDK, Grafana dashboard, Nix flake, DevContainer, and `.pyz` offline bundle).
+
+## [2.1.0] - 2026-11-13
+- Multi-format ingestion (`.html`, `.csv`, `.eml`), `API_KEY`/`IBAN` redaction, HMAC-SHA256 audit receipts, Concept-DPO training, `/triage/feedback` online adaptation, CVE/IP extraction, and V100/EPYC multi-dataset scaling receipts.
+
 ## [2.0.0] - 2026-11-12
 
 ### Added

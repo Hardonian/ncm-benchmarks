@@ -277,7 +277,7 @@ def create_app(
     app = fastapi.FastAPI(
         title="Next-Concept Modeling Sovereign Service",
         description="Local-first coarse-to-fine concept generation, MBR, and Sudoku microservice",
-        version="2.2.0",
+        version="3.0.0",
         lifespan=lifespan,
     )
 

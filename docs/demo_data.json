@@ -222,10 +222,10 @@
     "max_level": 2,
     "passes_early_exit": 3,
     "passes_full": 9,
-    "early_exit_total_s": 2.8482,
-    "early_exit_per_doc_ms": 356.02,
-    "full_decode_total_s": 9.641,
-    "full_decode_per_doc_ms": 1205.13,
-    "speedup": 3.38
+    "early_exit_total_s": 3.6289,
+    "early_exit_per_doc_ms": 453.61,
+    "full_decode_total_s": 11.8063,
+    "full_decode_per_doc_ms": 1475.79,
+    "speedup": 3.25
   }
 }

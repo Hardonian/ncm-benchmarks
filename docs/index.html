@@ -422,9 +422,9 @@
           <tbody>
             <tr>
               <td>O(L) vs O(T) Scaling (16&ndash;128 tok)</td>
-              <td>CausalTokenLM: 4.75 &rarr; 47.52 ms (16&ndash;128 passes)</td>
-              <td class="bench-highlight">3.59 &rarr; 3.88 ms (4 constant passes)</td>
-              <td class="bench-highlight">12.24x CPU speedup at 128 tok</td>
+              <td>CausalTokenLM: 4.12 &rarr; 61.23 ms (16&ndash;128 passes)</td>
+              <td class="bench-highlight">2.69 &rarr; 4.70 ms (4 constant passes)</td>
+              <td class="bench-highlight">13.04x CPU speedup at 128 tok</td>
             </tr>
             <tr>
               <td>Sudoku-Hard 9&times;9 (data/sudoku/hard, n=50)</td>
@@ -441,19 +441,19 @@
             <tr>
               <td>Mastermind 4-Peg (n=48 eval)</td>
               <td>Random: 2.08% | CausalTokenLM: 6.25% consistent (2.08% exact)</td>
-              <td class="bench-highlight">16.67% consistent / 6.25% exact (4 passes, Bo8)</td>
-              <td class="bench-highlight">2.67x higher consistency in 4 passes</td>
+              <td class="bench-highlight">20.83% consistent / 4.17% exact (4 passes, Bo8)</td>
+              <td class="bench-highlight">3.33x higher consistency in 4 passes</td>
             </tr>
             <tr>
               <td>Cold Mini-Sudoku 4&times;4 &amp; Dyck-2 (512 train, 450 steps)</td>
               <td>CausalTokenLM: 70.83% 4&times;4 solved | 68.75% valid Dyck-2</td>
-              <td>NCM: 25.00% 4&times;4 solved | 25.00% valid Dyck-2 (Bo8)</td>
+              <td>NCM: 35.42% 4&times;4 solved | 22.92% valid Dyck-2 (Bo8)</td>
               <td>Honest limit: tiny cold runs favor direct AR</td>
             </tr>
             <tr>
               <td>Paraphrased Triage &amp; Sovereign Compliance</td>
               <td>Keyword Top-1: 91.67% | Cloud PII Guard: 0.0%</td>
-              <td class="bench-highlight">83.33% Conformal Cov | 100% PII/Restore/Ed25519</td>
+              <td class="bench-highlight">58.33% Hybrid Top-1 / 83.33% Cov | 100% PII/Restore/Ed25519</td>
               <td class="bench-highlight">Catches $10 FinQA error &amp; proves egress audit</td>
             </tr>
           </tbody>

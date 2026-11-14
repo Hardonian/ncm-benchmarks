@@ -1,7 +1,7 @@
 replicaCount: 2
 image:
   repository: ghcr.io/hardonian/ncm-benchmarks
-  tag: "2.2.0"
+  tag: "3.0.0"
   pullPolicy: IfNotPresent
 service:
   type: ClusterIP
@@ -13,6 +13,13 @@ args:
   - "8031"
   - "--quantize"
   - "int8"
+resources:
+  requests:
+    cpu: "2"
+    memory: "2Gi"
+  limits:
+    cpu: "8"
+    memory: "4Gi"
 autoscaling:
   enabled: true
   minReplicas: 2
@@ -23,3 +30,5 @@ probes:
   livenessPath: /health
 env:
   HF_HUB_OFFLINE: "1"
+networkPolicy:
+  denyAllEgress: true
