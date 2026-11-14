@@ -145,11 +145,11 @@ def build_audit_receipt(
     """Creates a cryptographic SHA-256 compliance audit receipt without storing raw PII."""
     return {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "task": bundle.get("task", "xsum"),
-        "device": bundle.get("device", "cpu"),
-        "quantize": bundle.get("quantize", "none"),
-        "dtype": bundle.get("dtype", "fp32"),
-        "format": bundle.get("ckpt_format", "pt"),
+        "task": str(bundle.get("task", "xsum")),
+        "device": str(bundle.get("device", "cpu")),
+        "quantize": str(bundle.get("quantize", "none")),
+        "dtype": str(bundle.get("dtype", "fp32")),
+        "format": str(bundle.get("ckpt_format", "pt")),
         "mode": mode,
         "pii_redactions": pii_redactions,
         "input_chars": len(input_text),

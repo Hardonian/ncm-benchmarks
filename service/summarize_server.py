@@ -129,6 +129,17 @@ class LongDocRequest(SummarizeRequest):
     audit_receipt: bool = False
 
 
+class TriageRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=100_000)
+    labels: list[str] | None = Field(default=None, max_length=32)
+    max_level: int = Field(default=2, ge=0, le=16)
+    best_of_k: int = Field(default=3, ge=1, le=16)
+    temperature: float = Field(default=0.5, ge=0.0, le=2.0)
+    redact_pii: bool = False
+    restore_pii: bool = False
+    audit_receipt: bool = False
+
+
 CKPT: dict[str, Any] | None = None
 
 
@@ -505,6 +516,35 @@ def create_app(
                 mode="longdoc-mbr" if req.use_mbr else "longdoc",
             )
         return payload
+
+    @app.post("/triage", dependencies=[Depends(require_auth)])
+    async def triage_endpoint(req: TriageRequest):
+        from ncm_bench.longdoc import build_audit_receipt
+        from ncm_bench.triage import extract_structured_triage
+
+        res, latency_ms = await _run_serialized(
+            lambda b: extract_structured_triage(
+                b,
+                req.text,
+                labels=req.labels,
+                max_level=req.max_level,
+                best_of_k=req.best_of_k,
+                temperature=req.temperature,
+                redact=req.redact_pii,
+                restore=req.restore_pii,
+            )
+        )
+        res["latency_ms"] = latency_ms
+        if req.audit_receipt:
+            active_bundle = state["bundle"] or {}
+            res["audit_receipt"] = build_audit_receipt(
+                req.text,
+                res["summary"],
+                active_bundle,
+                pii_redactions=res.get("pii_redactions", 0),
+                mode="triage",
+            )
+        return res
 
     @app.post("/summarize", dependencies=[Depends(require_auth)])
     async def summarize_endpoint(req: SummarizeRequest):

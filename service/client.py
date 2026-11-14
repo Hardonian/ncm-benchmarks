@@ -177,6 +177,34 @@ class NCMClient:
             },
         )
 
+    def triage(
+        self,
+        text: str,
+        *,
+        labels: list[str] | None = None,
+        max_level: int = 2,
+        best_of_k: int = 3,
+        temperature: float = 0.5,
+        redact_pii: bool = False,
+        restore_pii: bool = False,
+        audit_receipt: bool = False,
+    ) -> dict[str, Any]:
+        """Runs coarse early-exit classification + verified structured triage via POST /triage."""
+        return self._request(
+            "POST",
+            "/triage",
+            json={
+                "text": text,
+                "labels": labels,
+                "max_level": max_level,
+                "best_of_k": best_of_k,
+                "temperature": temperature,
+                "redact_pii": redact_pii,
+                "restore_pii": restore_pii,
+                "audit_receipt": audit_receipt,
+            },
+        )
+
     def chat_completions(self, prompt: str, model: str = "ncm-xsum-88M") -> dict[str, Any]:
         """Calls the OpenAI-compatible POST /v1/chat/completions endpoint."""
         return self._request(

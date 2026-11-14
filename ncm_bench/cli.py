@@ -492,6 +492,253 @@ def cmd_train_smoke(args):
     )
 
 
+def cmd_rl_smoke(args):
+    import torch
+
+    from ncm_train import (
+        GRPOConfig,
+        Stage1Config,
+        Stage2Config,
+        train_stage1_vqvae,
+        train_stage2_grpo,
+        train_stage2_ncm,
+    )
+
+    torch.manual_seed(0)
+    vocab = 16
+    seq_len = 16
+    sequences = torch.randint(0, vocab, (args.samples, seq_len), dtype=torch.long)
+    prefixes = torch.randint(0, vocab, (args.samples, seq_len), dtype=torch.long)
+
+    s1 = Stage1Config(
+        in_vocab_size=vocab,
+        context_length=seq_len,
+        embed_dim=32,
+        levels=(2, 4, 8, 16),
+        vq_vocab_size=16,
+        n_layers=1,
+        batch_size=min(8, args.samples),
+        steps=4,
+        device=args.device or "cpu",
+    )
+    res1 = train_stage1_vqvae(sequences, s1)
+    s2 = Stage2Config(
+        prefix_len=seq_len,
+        n_layer=1,
+        n_head=2,
+        n_embd=32,
+        batch_size=min(8, args.samples),
+        steps=4,
+        query_level0=True,
+        device=args.device or "cpu",
+    )
+    res2 = train_stage2_ncm(prefixes, sequences, res1["model"], s1, s2)
+
+    # Deterministic verifiable reward: fraction of tokens staying within target lower-half token range [0, vocab//2)
+    def _verifiable_reward(decoded_logits: torch.Tensor, prompt_rep: torch.Tensor) -> torch.Tensor:
+        del prompt_rep
+        preds = decoded_logits.argmax(dim=-1)
+        return (preds < (vocab // 2)).float().mean(dim=-1)
+
+    grpo_cfg = GRPOConfig(
+        group_size=args.group_size,
+        batch_size=min(4, args.samples),
+        steps=args.steps,
+        temperature=0.8,
+        kl_beta=0.04,
+        device=args.device or "cpu",
+    )
+    res_grpo = train_stage2_grpo(
+        prefixes,
+        _verifiable_reward,
+        res1["model"],
+        res2["model"],
+        grpo_cfg,
+        out_path=Path(args.out_dir) / "generator_grpo.pt",
+    )
+    print(
+        json.dumps(
+            {
+                "initial_reward": round(res_grpo["initial_reward"], 4),
+                "final_reward": round(res_grpo["final_reward"], 4),
+                "delta_reward": round(res_grpo["final_reward"] - res_grpo["initial_reward"], 4),
+                "steps": args.steps,
+                "group_size": args.group_size,
+                "out_dir": str(Path(args.out_dir).resolve()),
+            },
+            indent=2,
+        )
+    )
+
+
+def cmd_distill_smoke(args):
+    import torch
+
+    from ncm_train import (
+        DistillConfig,
+        Stage1Config,
+        Stage2Config,
+        distill_teacher_into_ncm,
+        train_stage1_vqvae,
+        train_stage2_ncm,
+    )
+
+    torch.manual_seed(0)
+    vocab = 16
+    seq_len = 16
+    teacher_targets = torch.randint(0, vocab, (args.samples, seq_len), dtype=torch.long)
+    prefixes = torch.randint(0, vocab, (args.samples, seq_len), dtype=torch.long)
+
+    s1 = Stage1Config(
+        in_vocab_size=vocab,
+        context_length=seq_len,
+        embed_dim=32,
+        levels=(2, 4, 8, 16),
+        vq_vocab_size=16,
+        n_layers=1,
+        batch_size=min(8, args.samples),
+        steps=4,
+        device=args.device or "cpu",
+    )
+    res1 = train_stage1_vqvae(teacher_targets, s1)
+    teacher_s2 = Stage2Config(
+        prefix_len=seq_len,
+        n_layer=1,
+        n_head=4,
+        n_embd=64,
+        batch_size=min(8, args.samples),
+        steps=4,
+        query_level0=True,
+        device=args.device or "cpu",
+    )
+    teacher_res = train_stage2_ncm(prefixes, teacher_targets, res1["model"], s1, teacher_s2)
+    student_s2 = Stage2Config(
+        prefix_len=seq_len,
+        n_layer=1,
+        n_head=2,
+        n_embd=32,
+        batch_size=min(8, args.samples),
+        steps=args.steps,
+        query_level0=True,
+        device=args.device or "cpu",
+    )
+    res_d = distill_teacher_into_ncm(
+        prefixes,
+        teacher_targets,
+        res1["model"],
+        s1,
+        student_s2,
+        DistillConfig(
+            batch_size=min(8, args.samples),
+            steps=args.steps,
+            device=args.device or "cpu",
+        ),
+        teacher_net=teacher_res["model"],
+        out_path=Path(args.out_dir) / "generator_distilled.pt",
+    )
+    print(
+        json.dumps(
+            {
+                "initial_loss": round(res_d["initial_loss"], 4),
+                "final_loss": round(res_d["final_loss"], 4),
+                "steps": args.steps,
+                "out_dir": str(Path(args.out_dir).resolve()),
+            },
+            indent=2,
+        )
+    )
+
+
+def _load_bundle_for_args(task: str, args):
+    return get_model_bundle(
+        task=task,
+        quantize=getattr(args, "quantize", "none"),
+        device=getattr(args, "device", None),
+        verify_checksums=not getattr(args, "skip_checksum", False),
+        strict_checksums=getattr(args, "strict_checksums", False),
+        dtype=getattr(args, "dtype", "fp32"),
+        compile_model=getattr(args, "compile", False),
+    )
+
+
+def cmd_triage(args):
+    from ncm_bench.longdoc import build_audit_receipt
+    from ncm_bench.triage import extract_structured_triage
+
+    text = _read_text_arg(args)
+    if not text:
+        print("Error: provide --text, --input-file, or pipe input via stdin.", file=sys.stderr)
+        sys.exit(1)
+
+    bundle = _load_bundle_for_args("xsum", args)
+    labels = [s.strip() for s in args.labels.split(",") if s.strip()] if args.labels else None
+    t0 = time.perf_counter()
+    res = extract_structured_triage(
+        bundle,
+        text,
+        labels=labels,
+        max_level=args.max_level,
+        best_of_k=args.best_of_k,
+        temperature=args.temperature,
+        redact=bool(args.redact_pii),
+        restore=bool(args.restore_pii),
+    )
+    res["latency_ms"] = round((time.perf_counter() - t0) * 1000.0, 2)
+    if args.audit_receipt:
+        res["audit_receipt"] = build_audit_receipt(
+            text,
+            res["summary"],
+            bundle,
+            pii_redactions=res.get("pii_redactions", 0),
+            mode="triage",
+        )
+    if args.json:
+        _emit_output(json.dumps(res, indent=2), args)
+    else:
+        _emit_output(
+            f"[{res['category']} | priority={res.get('priority')} | schema_valid={res['schema_valid']}]\n{res['summary']}",
+            args,
+        )
+
+
+def cmd_early_exit_bench(args):
+    from ncm_bench.inference import summarize_texts
+    from ncm_bench.triage import generate_coarse_codes
+
+    data_file = ROOT_DIR / "data" / "xsum" / "passages.pickle"
+    if not data_file.exists():
+        print(f"Error: dataset not found at {data_file}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(data_file, "rb") as f:
+        passages = pickle.load(f)[: args.n]  # nosec B301 - verified by SHA256SUMS
+
+    bundle = _load_bundle_for_args("xsum", args)
+    # Warm up once
+    _ = generate_coarse_codes(bundle, [passages[0]], max_level=args.max_level)
+
+    t0 = time.perf_counter()
+    coarse_out = generate_coarse_codes(bundle, passages, max_level=args.max_level)
+    coarse_s = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
+    _ = summarize_texts(bundle, passages)
+    full_s = time.perf_counter() - t1
+
+    payload = {
+        "n": len(passages),
+        "max_level": args.max_level,
+        "passes_early_exit": coarse_out[0]["passes_executed"] if coarse_out else 0,
+        "passes_full": coarse_out[0]["total_levels"] if coarse_out else 0,
+        "early_exit_total_s": round(coarse_s, 4),
+        "early_exit_per_doc_ms": round((coarse_s / max(len(passages), 1)) * 1000.0, 2),
+        "full_decode_total_s": round(full_s, 4),
+        "full_decode_per_doc_ms": round((full_s / max(len(passages), 1)) * 1000.0, 2),
+        "speedup": round(full_s / max(coarse_s, 1e-6), 2),
+    }
+    print(json.dumps(payload, indent=2))
+
+
 def cmd_verify(args):
     from scripts.fetch_artifacts import load_checksums, sha256_file
 
@@ -632,6 +879,44 @@ def main():
     p_ts.add_argument("--s2-steps", type=int, default=10)
     p_ts.add_argument("--out-dir", default="artifacts/train_smoke")
     p_ts.set_defaults(func=cmd_train_smoke)
+
+    # rl-smoke
+    p_rl = sub.add_parser("rl-smoke", help="Run verifiable-reward GRPO/RLVR over discrete NCM codebooks")
+    p_rl.add_argument("--samples", type=int, default=16)
+    p_rl.add_argument("--steps", type=int, default=6)
+    p_rl.add_argument("--group-size", type=int, default=4)
+    p_rl.add_argument("--device", default="cpu")
+    p_rl.add_argument("--out-dir", default="artifacts/rl_smoke")
+    p_rl.set_defaults(func=cmd_rl_smoke)
+
+    # distill-smoke
+    p_ds = sub.add_parser("distill-smoke", help="Run teacher-student concept distillation smoke check")
+    p_ds.add_argument("--samples", type=int, default=16)
+    p_ds.add_argument("--steps", type=int, default=8)
+    p_ds.add_argument("--device", default="cpu")
+    p_ds.add_argument("--out-dir", default="artifacts/distill_smoke")
+    p_ds.set_defaults(func=cmd_distill_smoke)
+
+    # triage
+    p_tri = sub.add_parser("triage", help="Early-exit coarse concept classification + verified structured extraction")
+    p_tri.add_argument("--text", "-t", default=None)
+    p_tri.add_argument("--labels", default=None, help="Comma-separated allowed labels")
+    p_tri.add_argument("--max-level", type=int, default=2, help="Coarse concept exit level (0..8)")
+    p_tri.add_argument("--best-of-k", type=int, default=3, help="Parallel candidates for schema/consensus scoring")
+    p_tri.add_argument("--temperature", type=float, default=0.5)
+    p_tri.add_argument("--redact-pii", action="store_true")
+    p_tri.add_argument("--restore-pii", action="store_true")
+    p_tri.add_argument("--audit-receipt", action="store_true")
+    p_tri.add_argument("--json", action="store_true")
+    _add_common_flags(p_tri, with_io=True)
+    p_tri.set_defaults(func=cmd_triage)
+
+    # early-exit-bench
+    p_eeb = sub.add_parser("early-exit-bench", help="Benchmark coarse Level 0..k early-exit vs full NCM decode")
+    p_eeb.add_argument("--n", type=int, default=8)
+    p_eeb.add_argument("--max-level", type=int, default=2)
+    _add_common_flags(p_eeb, with_io=False)
+    p_eeb.set_defaults(func=cmd_early_exit_bench)
 
     # verify
     p_ver = sub.add_parser("verify", help="Verify model and data SHA256 checksums")

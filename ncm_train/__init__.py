@@ -5,7 +5,24 @@ This package implements reproducible Stage-1 and Stage-2 training loops compatib
 upstream NCM checkpoints and NCM inference/evaluation pipelines.
 """
 from ncm_train.ncm_trainer import Stage2Config, train_stage2_ncm
+from ncm_train.rl_distill import (
+    DistillConfig,
+    GRPOConfig,
+    compute_concept_logprobs,
+    distill_teacher_into_ncm,
+    train_stage2_grpo,
+)
 from ncm_train.vqvae_trainer import Stage1Config, train_stage1_vqvae
 
-__all__ = ["Stage1Config", "Stage2Config", "train_stage1_vqvae", "train_stage2_ncm"]
+__all__ = [
+    "DistillConfig",
+    "GRPOConfig",
+    "Stage1Config",
+    "Stage2Config",
+    "compute_concept_logprobs",
+    "distill_teacher_into_ncm",
+    "train_stage1_vqvae",
+    "train_stage2_grpo",
+    "train_stage2_ncm",
+]
 
