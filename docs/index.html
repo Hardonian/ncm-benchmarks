@@ -200,7 +200,20 @@
     .hidden { display: none; }
     .status-msg { font-size: 0.88rem; color: var(--text-secondary); margin-top: 0.5rem; }
     .status-msg.error { color: var(--danger); }
+    .status-msg.inline-status { margin-top: 0; }
     label.check { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.88rem; color: var(--text-secondary); cursor: pointer; }
+    .field-label { font-size: 0.9rem; color: var(--text-secondary); font-weight: 600; }
+    .mt-sm { margin-top: 0.75rem; }
+    .mt-md { margin-top: 0.85rem; }
+    .mb-none { margin-bottom: 0; }
+    .mb-sm { margin-bottom: 0.85rem; }
+    .sub-label { font-size: 0.82rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .sub-label.accent { color: var(--accent); }
+    .sub-label.success { color: var(--success); }
+    .passage-box.primary { color: var(--text-primary); }
+    .flex-input { flex: 1; min-width: 220px; }
+    .labels-input { flex: 1; min-width: 260px; }
+    .token-input { width: 210px; }
   </style>
 </head>
 <body>
@@ -228,7 +241,7 @@
 
       <div class="card">
         <div class="controls-row">
-          <label for="example-select" style="font-size:0.9rem;color:var(--text-secondary);font-weight:600;">XSum Validation Sample:</label>
+          <label for="example-select" class="field-label">XSum Validation Sample:</label>
           <select id="example-select"></select>
           <button class="secondary" id="prev-level-btn" type="button">- Level</button>
           <button class="secondary" id="next-level-btn" type="button">+ Level</button>
@@ -236,10 +249,10 @@
         </div>
 
         <div class="card-title">Hierarchical Residual Depth: Level <span id="level-num">0</span> / <span id="level-max">8</span></div>
-        <input type="range" id="level-slider" min="0" max="8" value="0" />
+        <input type="range" id="level-slider" min="0" max="8" value="0" aria-label="Hierarchical residual concept level" title="Hierarchical residual concept level" />
         <div class="level-dots" id="level-dots"></div>
 
-        <div class="card-title" style="margin-top:0.85rem;">Decoded Text at Level <span id="level-num-2">0</span> (green = words refined since previous level)</div>
+        <div class="card-title mt-md">Decoded Text at Level <span id="level-num-2">0</span> (green = words refined since previous level)</div>
         <div class="summary-stage" id="level-output">Loading demo_data.json...</div>
         <p class="status-msg" id="level-meta"></p>
       </div>
@@ -251,10 +264,10 @@
         </div>
         <div class="card">
           <div class="card-title">Gold Reference &amp; Full L8 Summary</div>
-          <p style="font-size:0.82rem;color:var(--accent);font-weight:600;margin-bottom:0.25rem;">Human Reference</p>
-          <div class="passage-box" id="gold-ref" style="margin-bottom:0.85rem;color:var(--text-primary);"></div>
-          <p style="font-size:0.82rem;color:var(--success);font-weight:600;margin-bottom:0.25rem;">Final NCM L8 Decode</p>
-          <div class="passage-box" id="final-ncm" style="color:var(--text-primary);"></div>
+          <p class="sub-label accent">Human Reference</p>
+          <div class="passage-box primary mb-sm" id="gold-ref"></div>
+          <p class="sub-label success">Final NCM L8 Decode</p>
+          <div class="passage-box primary" id="final-ncm"></div>
         </div>
       </div>
     </section>
@@ -262,9 +275,9 @@
     <!-- SHARED SERVER CONNECTION BAR FOR LIVE TABS -->
     <div class="card hidden" id="server-bar">
       <div class="card-title">Local NCM Server Connection (run <code>ncm-bench serve --port 8031</code>)</div>
-      <div class="controls-row" style="margin-bottom:0;">
-        <input type="text" id="server-url" value="http://127.0.0.1:8031" style="flex:1;min-width:220px;" placeholder="http://127.0.0.1:8031" />
-        <input type="password" id="server-token" style="width:210px;" placeholder="Optional Bearer token" />
+      <div class="controls-row mb-none">
+        <input type="text" id="server-url" class="flex-input" value="http://127.0.0.1:8031" aria-label="Local NCM server URL" placeholder="http://127.0.0.1:8031" />
+        <input type="password" id="server-token" class="token-input" aria-label="Optional Bearer token" placeholder="Optional Bearer token" />
       </div>
     </div>
 
@@ -272,10 +285,10 @@
     <section id="tab-live-prog" class="hidden">
       <div class="card">
         <div class="card-title">Paste Document for Live 9-Level Concept Decoding</div>
-        <textarea id="live-prog-text">Wales captain Sam Warburton says he is "desperate" to feature in Saturday's Six Nations clash against England at Twickenham after recovering from an ankle injury. Head coach Warren Gatland will name his starting XV on Thursday morning.</textarea>
-        <div class="controls-row" style="margin-top:0.85rem;margin-bottom:0;">
+        <textarea id="live-prog-text" aria-label="Document text for progressive concept decoding">Wales captain Sam Warburton says he is "desperate" to feature in Saturday's Six Nations clash against England at Twickenham after recovering from an ankle injury. Head coach Warren Gatland will name his starting XV on Thursday morning.</textarea>
+        <div class="controls-row mt-md mb-none">
           <button class="primary" id="run-live-prog" type="button">Decode All Concept Levels</button>
-          <span class="status-msg" id="live-prog-status" style="margin-top:0;"></span>
+          <span class="status-msg inline-status" id="live-prog-status"></span>
         </div>
       </div>
       <div class="card hidden" id="live-prog-results-card">
@@ -288,9 +301,9 @@
     <section id="tab-live-triage" class="hidden">
       <div class="card">
         <div class="card-title">Zero-Egress Early-Exit Triage &amp; Schema Extraction (<code>POST /triage</code>)</div>
-        <textarea id="triage-text">URGENT: Patient Jane Doe (email jane.doe@example.org) reported sudden chest tightness after taking 25mg metoprolol at 08:15 AM in Boston. Escalate immediately to Cardiology on-call.</textarea>
-        <div class="controls-row" style="margin-top:0.75rem;">
-          <input type="text" id="triage-labels" value="cardiology-urgent, billing, scheduling, general-inquiry" style="flex:1;min-width:260px;" />
+        <textarea id="triage-text" aria-label="Document text for sovereign triage">URGENT: Patient Jane Doe (email jane.doe@example.org) reported sudden chest tightness after taking 25mg metoprolol at 08:15 AM in Boston. Escalate immediately to Cardiology on-call.</textarea>
+        <div class="controls-row mt-sm">
+          <input type="text" id="triage-labels" class="labels-input" value="cardiology-urgent, billing, scheduling, general-inquiry" aria-label="Allowed triage labels" placeholder="cardiology-urgent, billing, scheduling, general-inquiry" />
           <label class="check"><input type="checkbox" id="triage-pii" checked /> Redact &amp; Restore PII</label>
           <label class="check"><input type="checkbox" id="triage-audit" checked /> Audit Receipt</label>
           <button class="primary" id="run-triage-btn" type="button">Run Sovereign Triage</button>
