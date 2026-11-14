@@ -28,7 +28,22 @@ class Stage2Config:
     lr: float = 5e-4
     corrupt_prob: float = 0.1
     query_level0: bool = True
+    grad_clip: float = 1.0
+    grad_accum_steps: int = 1
+    resume_from: Path | str | None = None
     device: str = "cpu"
+
+
+def _load_stage2_state(path: Path, dev: torch.device) -> dict[str, torch.Tensor]:
+    """Loads Stage-2 state_dict from .safetensors or weights-only .pt checkpoint."""
+    if path.suffix.lower() == ".safetensors":
+        from safetensors.torch import load_file as st_load_file
+
+        return st_load_file(str(path), device=str(dev))
+    sd = torch.load(str(path), map_location=dev, weights_only=True)
+    if isinstance(sd, dict) and "model" in sd and isinstance(sd["model"], dict):
+        return sd["model"]
+    return sd
 
 
 def build_ncm_from_configs(s1: Stage1Config, s2: Stage2Config, vqvae):
@@ -87,6 +102,8 @@ def train_stage2_ncm(
         p.requires_grad = False
 
     net = build_ncm_from_configs(s1_cfg, s2_cfg, vqvae).to(dev)
+    if s2_cfg.resume_from is not None and Path(s2_cfg.resume_from).exists():
+        net.load_state_dict(_load_stage2_state(Path(s2_cfg.resume_from), dev), strict=True)
     net.train()
 
     optimizer = torch.optim.AdamW(net.parameters(), lr=s2_cfg.lr, weight_decay=0.01)
@@ -96,9 +113,12 @@ def train_stage2_ncm(
         batch_size=s2_cfg.batch_size,
         shuffle=True,
     )
+    accum = max(1, int(s2_cfg.grad_accum_steps))
 
     history: list[dict[str, float]] = []
     step = 0
+    micro_step = 0
+    optimizer.zero_grad(set_to_none=True)
     while step < s2_cfg.steps:
         for pfx_b, tgt_b in loader:
             if step >= s2_cfg.steps:
@@ -121,16 +141,20 @@ def train_stage2_ncm(
                 z_prefix = vqvae.encoder.wte(pfx_b)[:, : s2_cfg.prefix_len, :]
                 x_in = torch.cat([z_prefix, x_target_all], dim=1)
 
-            optimizer.zero_grad(set_to_none=True)
             logits = net(x_in)
             loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), target_labels.reshape(-1))
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
-            optimizer.step()
-            scheduler.step()
+            (loss / accum).backward()
+            micro_step += 1
 
-            history.append({"step": float(step), "loss": float(loss.item())})
-            step += 1
+            if micro_step % accum == 0:
+                if s2_cfg.grad_clip > 0:
+                    torch.nn.utils.clip_grad_norm_(net.parameters(), s2_cfg.grad_clip)
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad(set_to_none=True)
+
+                history.append({"step": float(step), "loss": float(loss.item())})
+                step += 1
 
     net.eval()
     if out_path is not None:
@@ -138,10 +162,22 @@ def train_stage2_ncm(
         out_file.parent.mkdir(parents=True, exist_ok=True)
         unigram = torch.bincount(targets.reshape(-1), minlength=s1_cfg.in_vocab_size).float()
         unigram = unigram / unigram.sum().clamp_min(1.0)
-        torch.save(
-            {"model": net.state_dict(), "inference": {"token_unigram": unigram}},
-            out_file,
-        )
+        if out_file.suffix.lower() == ".safetensors":
+            import json
+
+            from safetensors.torch import save_file as st_save_file
+
+            st_save_file({k: v.detach().cpu().contiguous() for k, v in net.state_dict().items()}, str(out_file))
+            meta_file = out_file.with_suffix(".meta.json")
+            meta_file.write_text(
+                json.dumps({"token_unigram": [float(v) for v in unigram.tolist()]}),
+                encoding="utf-8",
+            )
+        else:
+            torch.save(
+                {"model": net.state_dict(), "inference": {"token_unigram": unigram}},
+                out_file,
+            )
 
     return {"model": net, "history": history, "final_loss": history[-1]["loss"]}
 

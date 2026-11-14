@@ -133,3 +133,16 @@ Comprehensive 10-pillar engineering roadmap tracking all 100 completed capabilit
 98. [x] Sovereign energy telemetry estimator (`estimate_energy_telemetry`, `ncm_bench/frontier.py`, `v2.2.0`)
 99. [x] Multimodal 2D layout bounding-box + token joint concept encoder (`encode_layout_text_joint_concepts`, `ncm_bench/frontier.py`, `v2.2.0`)
 100. [x] Community hardware leaderboard receipt schema validator (`validate_receipt_submission`, `ncm-bench validate-receipt`, `v2.2.0`)
+
+---
+
+## v3.0 Enterprise Productization Hardening (Completed)
+
+Building on the `v2.2.0` 100-item foundation, `v3.0` hardens core security, persistence, training depth, and runtime kernels for sovereign multi-tenant deployment:
+
+- **Trainer Hardening & Safe Checkpointing (`ncm_train/vqvae_trainer.py`, `ncm_train/ncm_trainer.py`)**: Restored `ema_decay` & `dropout` configuration, added `grad_clip`, `lr_schedule`, `grad_accum_steps`, `resume_from` checkpoint recovery, and native `.safetensors` serialization.
+- **Deep Recursive LoRA (`ncm_train/adapters.py`)**: Recursive `inject_concept_lora` across nested Transformer `nn.Linear` submodules with optional `target_modules` filter plus compact `extract_lora_state_dict` / `load_lora_state_dict` serialization.
+- **AEAD Encryption & WAL SQLite Audit (`ncm_bench/compliance.py`)**: Upgraded field-level envelopes to `AES-256-GCM` with `key_id` rotation lookup (`PBKDF2-SHA256-HMAC` backward compatibility preserved) and enabled `WAL` journal mode, `busy_timeout=5000`, and streaming batched `fetchmany` chain verification in `AuditSinkSQLite`.
+- **Decompression Quota & Table-Aware Ingestion (`ncm_bench/longdoc.py`)**: Enforced `max_archive_bytes` zip-bomb guards on `.docx`/`.xlsx`, preserved row/table structure, added `MRN` scrubbing + `ner_fn` contextual redaction hook, and added NVML/RAPL hardware telemetry detection in `ncm_bench/frontier.py`.
+- **Persistent Hybrid Triage & Async Coalescing (`ncm_bench/triage.py`, `service/summarize_server.py`, `service/transport.py`)**: Added JSON persistence (`save`/`load` & `triage_state_path` / `NCM_TRIAGE_STATE_PATH`) for `/triage/feedback`, lexical + concept hybrid scoring in `ConceptClassifier.predict_one`, and time-windowed `DynamicBatchCoalescer.submit()` / `process_async()`.
+- **INT4 Drop-in Linear & Stateful JSON Grammar FSM (`ncm_bench/accel.py`, `ncm_bench/reasoning.py`, `ncm_bench/inference.py`)**: Added recursive `Int4Linear` + `quantize_model_int4`, `torchao`-ready `_apply_dynamic_int8` (suppressing noisy `torch.ao` warnings), and multi-step `JSONGrammarStateMachine`.

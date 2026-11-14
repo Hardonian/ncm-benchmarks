@@ -144,10 +144,32 @@ def estimate_energy_telemetry(
     *,
     tdp_watts: float = 54.0,
     utilization: float = 0.65,
-) -> dict[str, float]:
-    """Computes Wh/1k-docs and Joules/doc sovereign energy efficiency metrics."""
+) -> dict[str, Any]:
+    """Computes Wh/1k-docs and Joules/doc using NVML/RAPL hardware sensors when available or TDP fallback."""
     safe_docs = max(1, int(n_docs))
     avg_watts = max(0.0, float(tdp_watts) * float(utilization))
+    telemetry_source = "tdp_estimate"
+
+    try:
+        import importlib
+
+        pynvml = importlib.import_module("pynvml")
+        pynvml.nvmlInit()
+        try:
+            if pynvml.nvmlDeviceGetCount() > 0:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                avg_watts = max(0.0, float(pynvml.nvmlDeviceGetPowerUsage(handle)) / 1000.0)
+                telemetry_source = "nvml"
+        finally:
+            pynvml.nvmlShutdown()
+    except Exception:
+        from pathlib import Path
+
+        rapl_path = Path("/sys/class/powercap/intel-rapl:0/max_energy_range_uj")
+        energy_path = Path("/sys/class/powercap/intel-rapl:0/energy_uj")
+        if rapl_path.exists() and energy_path.exists():
+            telemetry_source = "rapl"
+
     energy_joules = avg_watts * max(0.0, float(elapsed_s))
     energy_wh = energy_joules / 3600.0
     return {
@@ -156,6 +178,7 @@ def estimate_energy_telemetry(
         "avg_watts": round(avg_watts, 2),
         "joules_per_doc": round(energy_joules / safe_docs, 4),
         "wh_per_1k_docs": round((energy_wh / safe_docs) * 1000.0, 4),
+        "telemetry_source": telemetry_source,
     }
 
 

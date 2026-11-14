@@ -421,6 +421,18 @@ class ConceptClassifier:
             return _heuristic_route(text_hint, escalation_threshold=self.escalation_confidence)
 
         scores = {lbl: _sparse_cosine(signature["histogram"], c) for lbl, c in self.centroids.items()}
+        if text_hint.strip():
+            lex = _heuristic_route(
+                text_hint,
+                labels=list(self.centroids.keys()),
+                escalation_threshold=self.escalation_confidence,
+            )
+            lex_scores = lex.get("scores", {})
+            if any(float(v) > 0.0 for v in lex_scores.values()):
+                scores = {
+                    lbl: 0.5 * scores[lbl] + 0.5 * float(lex_scores.get(lbl, 0.0))
+                    for lbl in self.centroids
+                }
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         best_label, best_score = ranked[0]
         second_score = ranked[1][1] if len(ranked) > 1 else 0.0
@@ -440,6 +452,39 @@ class ConceptClassifier:
             "concept_hash": signature.get("concept_hash", ""),
             "early_exit_passes": signature.get("passes_executed", 0),
         }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializes classifier centroids, conformal quantile, and threshold to JSON-safe dict."""
+        return {
+            "version": 1,
+            "escalation_confidence": self.escalation_confidence,
+            "conformal_q": self.conformal_q,
+            "centroids": {
+                lbl: {str(k): v for k, v in hist.items()} for lbl, hist in self.centroids.items()
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ConceptClassifier":
+        """Reconstructs a persisted ConceptClassifier from dictionary payload."""
+        clf = cls(escalation_confidence=float(payload.get("escalation_confidence", 0.45)))
+        clf.conformal_q = float(payload.get("conformal_q", 0.85))
+        clf.centroids = {
+            str(lbl): {int(k): float(v) for k, v in hist.items()}
+            for lbl, hist in payload.get("centroids", {}).items()
+        }
+        return clf
+
+    def save(self, path: str | Path) -> None:
+        """Writes persisted classifier state atomically to UTF-8 JSON."""
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
+
+    @classmethod
+    def load(cls, path: str | Path) -> "ConceptClassifier":
+        """Loads a ConceptClassifier from disk."""
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
     def _unit_hist(self, hist: dict[int, float]) -> dict[int, float]:
         norm = math.sqrt(sum(v * v for v in hist.values()))
@@ -514,6 +559,7 @@ def _heuristic_route(text: str, *, labels: list[str] | None = None, escalation_t
         "confidence": round(confidence, 4),
         "margin": round(margin, 4),
         "escalate": confidence < escalation_threshold or total == 0,
+        "scores": {lbl: round(sc / max(total, 1.0), 4) for lbl, sc in raw_scores.items()},
     }
 
 

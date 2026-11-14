@@ -179,3 +179,56 @@ def adaptive_entropy_early_exit(
         "entropies": entropies,
         "selected_codes": selected_codes,
     }
+
+
+class JSONGrammarStateMachine:
+    """Stateful constrained decoding FSM enforcing valid JSON object token transitions."""
+
+    def __init__(self) -> None:
+        self.state = "expect_open_brace"
+
+    def _token_allowed(self, token_str: str) -> bool:
+        tok = token_str.strip()
+        if not tok:
+            return False
+        if self.state == "expect_open_brace":
+            return tok == "{"
+        if self.state == "expect_key_or_close":
+            return tok == "}" or (len(tok) >= 2 and tok.startswith('"') and tok.endswith('"'))
+        if self.state == "expect_colon":
+            return tok == ":"
+        if self.state == "expect_value":
+            if tok in ("true", "false", "null"):
+                return True
+            if len(tok) >= 2 and tok.startswith('"') and tok.endswith('"'):
+                return True
+            return tok.lstrip("-").replace(".", "", 1).isdigit()
+        if self.state == "expect_comma_or_close":
+            return tok in (",", "}")
+        return False
+
+    def advance(self, token_str: str) -> str:
+        """Advances the FSM state given an accepted token string and returns the new state."""
+        tok = token_str.strip()
+        if self.state == "expect_open_brace" and tok == "{":
+            self.state = "expect_key_or_close"
+        elif self.state == "expect_key_or_close":
+            if tok == "}":
+                self.state = "complete"
+            elif tok.startswith('"') and tok.endswith('"'):
+                self.state = "expect_colon"
+        elif self.state == "expect_colon" and tok == ":":
+            self.state = "expect_value"
+        elif self.state == "expect_value":
+            self.state = "expect_comma_or_close"
+        elif self.state == "expect_comma_or_close":
+            if tok == ",":
+                self.state = "expect_key_or_close"
+            elif tok == "}":
+                self.state = "complete"
+        return self.state
+
+    def mask_logits(self, logits: torch.Tensor, id_to_token: dict[int, str]) -> torch.Tensor:
+        """Applies grammar constraints for the current FSM state using apply_json_grammar_mask."""
+        allowed_ids = [idx for idx, tok in id_to_token.items() if self._token_allowed(tok)]
+        return apply_json_grammar_mask(logits, allowed_ids)

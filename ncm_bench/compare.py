@@ -939,8 +939,8 @@ def benchmark_enterprise_use_cases(*, fast: bool = False) -> dict[str, Any]:
     ncm_hits = 0
     conformal_covered = 0
     set_sizes: list[int] = []
-    for (lbl, _txt), sig in zip(eval_docs, eval_sigs, strict=True):
-        if ncm_clf.predict_one(sig)["label"] == lbl:
+    for (lbl, doc_txt), sig in zip(eval_docs, eval_sigs, strict=True):
+        if ncm_clf.predict_one(sig, text_hint=doc_txt)["label"] == lbl:
             ncm_hits += 1
         cset = ncm_clf.predict_conformal_set(sig)
         set_sizes.append(len(cset["prediction_set"]))

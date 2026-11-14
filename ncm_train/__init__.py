@@ -10,7 +10,9 @@ from ncm_train.adapters import (
     ConceptLoRALinear,
     DDPConfig,
     RegexRewardPlugin,
+    extract_lora_state_dict,
     inject_concept_lora,
+    load_lora_state_dict,
     wrap_model_distributed,
 )
 from ncm_train.ncm_trainer import Stage2Config, train_stage2_ncm
@@ -38,7 +40,9 @@ __all__ = [
     "Stage2Config",
     "compute_concept_logprobs",
     "distill_teacher_into_ncm",
+    "extract_lora_state_dict",
     "inject_concept_lora",
+    "load_lora_state_dict",
     "train_stage1_vqvae",
     "train_stage2_dpo",
     "train_stage2_grpo",

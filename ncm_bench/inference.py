@@ -6,9 +6,11 @@ dtype/quantization selection, batched summarization, and Sudoku solving + repair
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -178,6 +180,21 @@ def export_safetensors(
     return {"tokenizer": tok_out, "generator": gen_out, "meta": meta_out}
 
 
+def _apply_dynamic_int8(net: torch.nn.Module) -> torch.nn.Module:
+    """Applies CPU dynamic INT8 quantization, preferring torchao with filtered torch.ao fallback."""
+    try:
+        q_mod = importlib.import_module("torchao.quantization")
+        if hasattr(q_mod, "quantize_") and hasattr(q_mod, "int8_dynamic_activation_int8_weight"):
+            q_mod.quantize_(net, q_mod.int8_dynamic_activation_int8_weight())
+            return net
+    except Exception:
+        pass
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        warnings.filterwarnings("ignore", message=".*torch\\.quantize_per_tensor.*", category=UserWarning)
+        return torch.ao.quantization.quantize_dynamic(net, {torch.nn.Linear}, dtype=torch.qint8)
+
+
 def load_bundle(
     task: str = "xsum",
     device: str | None = None,
@@ -286,7 +303,7 @@ def load_bundle(
     if quantize == "int8":
         if target_device != "cpu":
             raise ValueError("Dynamic INT8 quantization is supported on CPU only.")
-        net = torch.ao.quantization.quantize_dynamic(net, {torch.nn.Linear}, dtype=torch.qint8)
+        net = _apply_dynamic_int8(net)
         applied_quant = "int8"
 
     if compile_model and hasattr(torch, "compile"):

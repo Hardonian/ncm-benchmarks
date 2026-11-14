@@ -27,7 +27,25 @@ class Stage1Config:
     steps: int = 50
     lr: float = 3e-4
     vq_loss_weight: float = 1.0
+    ema_decay: float = 0.99
+    dropout: float = 0.1
+    grad_clip: float = 1.0
+    lr_schedule: str = "cosine"
+    grad_accum_steps: int = 1
+    resume_from: Path | str | None = None
     device: str = "cpu"
+
+
+def _load_checkpoint_state(path: Path, dev: torch.device) -> dict[str, torch.Tensor]:
+    """Loads state_dict from .safetensors or weights-only .pt file."""
+    if path.suffix.lower() == ".safetensors":
+        from safetensors.torch import load_file as st_load_file
+
+        return st_load_file(str(path), device=str(dev))
+    sd = torch.load(str(path), map_location=dev, weights_only=True)
+    if isinstance(sd, dict) and "model" in sd and isinstance(sd["model"], dict):
+        return sd["model"]
+    return sd
 
 
 def build_vqvae_from_stage1_config(cfg: Stage1Config):
@@ -38,7 +56,7 @@ def build_vqvae_from_stage1_config(cfg: Stage1Config):
     vq_cfg = OmegaConf.create(
         {
             "clss": "multiscale_residual_vector_quantizer",
-            "decay": 0.99,
+            "decay": cfg.ema_decay,
             "epsilon": 1e-5,
             "commitment_cost": 0.25,
             "learned_l1_sampling": True,
@@ -55,7 +73,7 @@ def build_vqvae_from_stage1_config(cfg: Stage1Config):
         n_layers=cfg.n_layers,
         vector_quantizer_config=vq_cfg,
         compression_factor=1,
-        dropout=0.1,
+        dropout=cfg.dropout,
         pre_quant_groupnorm=4,
         pre_quant_norm_type="group",
         use_qk_norm=True,
@@ -76,42 +94,63 @@ def train_stage1_vqvae(
 
     dev = torch.device(cfg.device)
     model = build_vqvae_from_stage1_config(cfg).to(dev)
+    if cfg.resume_from is not None and Path(cfg.resume_from).exists():
+        model.load_state_dict(_load_checkpoint_state(Path(cfg.resume_from), dev), strict=True)
     model.train()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=0.01)
+    scheduler = (
+        torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(1, cfg.steps))
+        if cfg.lr_schedule == "cosine"
+        else None
+    )
     loader = DataLoader(TensorDataset(sequences.long()), batch_size=cfg.batch_size, shuffle=True)
+    accum = max(1, int(cfg.grad_accum_steps))
 
     history: list[dict[str, float]] = []
     step = 0
+    micro_step = 0
+    optimizer.zero_grad(set_to_none=True)
     while step < cfg.steps:
         for (batch_x,) in loader:
             if step >= cfg.steps:
                 break
             batch_x = batch_x.to(dev)
-            optimizer.zero_grad(set_to_none=True)
             logits, vq_loss, _, global_util, _ = model(batch_x)
             recon_loss = F.cross_entropy(logits.reshape(-1, logits.shape[-1]), batch_x.reshape(-1))
             loss = recon_loss + cfg.vq_loss_weight * vq_loss
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+            (loss / accum).backward()
+            micro_step += 1
 
-            history.append(
-                {
-                    "step": float(step),
-                    "loss": float(loss.item()),
-                    "recon_loss": float(recon_loss.item()),
-                    "vq_loss": float(vq_loss.item()),
-                    "codebook_util": float(global_util),
-                }
-            )
-            step += 1
+            if micro_step % accum == 0:
+                if cfg.grad_clip > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
+                optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
+                optimizer.zero_grad(set_to_none=True)
+
+                history.append(
+                    {
+                        "step": float(step),
+                        "loss": float(loss.item()),
+                        "recon_loss": float(recon_loss.item()),
+                        "vq_loss": float(vq_loss.item()),
+                        "codebook_util": float(global_util),
+                    }
+                )
+                step += 1
 
     model.eval()
     if out_path is not None:
         out_file = Path(out_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
-        torch.save({"model": model.state_dict()}, out_file)
+        if out_file.suffix.lower() == ".safetensors":
+            from safetensors.torch import save_file as st_save_file
+
+            st_save_file({k: v.detach().cpu().contiguous() for k, v in model.state_dict().items()}, str(out_file))
+        else:
+            torch.save({"model": model.state_dict()}, out_file)
 
     return {"model": model, "history": history, "final_loss": history[-1]["loss"]}
 

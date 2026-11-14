@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 def quantize_weights_int4_groupwise(weight: torch.Tensor, group_size: int = 32) -> dict[str, Any]:
@@ -149,4 +151,65 @@ def probe_accelerator_capabilities() -> dict[str, Any]:
         "rocm_hip": rocm_ver,
         "device_name": torch.cuda.get_device_name(0) if cuda_ok else f"{os.name}-cpu",
         "vq_lookup_16x256_ms": vq_ms,
+    }
+
+
+class Int4Linear(nn.Module):
+    """Drop-in groupwise 4-bit nibble-packed Linear replacement with on-the-fly dequantized GEMM."""
+
+    def __init__(self, linear: nn.Linear, group_size: int = 32) -> None:
+        super().__init__()
+        self.in_features = linear.in_features
+        self.out_features = linear.out_features
+        pack = quantize_weights_int4_groupwise(linear.weight.data, group_size=group_size)
+        self.group_size = int(pack["group_size"])
+        self.padded_numel = int(pack["padded_numel"])
+        self.weight_shape = tuple(pack["shape"])
+        self.compression_ratio = float(pack["compression_ratio"])
+        self.register_buffer("packed", pack["packed"])
+        self.register_buffer("scales", pack["scales"])
+        if linear.bias is not None:
+            self.register_buffer("bias", linear.bias.detach().clone())
+        else:
+            self.bias = None
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        weight = dequantize_weights_int4_groupwise(
+            {
+                "packed": self.packed,
+                "scales": self.scales,
+                "shape": self.weight_shape,
+                "group_size": self.group_size,
+                "padded_numel": self.padded_numel,
+            }
+        ).to(device=x.device, dtype=x.dtype)
+        bias = self.bias.to(device=x.device, dtype=x.dtype) if self.bias is not None else None
+        return F.linear(x, weight, bias)
+
+
+def quantize_model_int4(model: nn.Module, *, group_size: int = 32) -> dict[str, Any]:
+    """Recursively replaces nn.Linear submodules with weight-only groupwise Int4Linear modules."""
+    layers_quantized = 0
+    total_compression = 0.0
+
+    def _recurse(parent: nn.Module) -> None:
+        nonlocal layers_quantized, total_compression
+        for name, child in list(parent.named_children()):
+            if isinstance(child, Int4Linear):
+                continue
+            if isinstance(child, nn.Linear):
+                q_mod = Int4Linear(child, group_size=group_size)
+                setattr(parent, name, q_mod)
+                layers_quantized += 1
+                total_compression += q_mod.compression_ratio
+            else:
+                _recurse(child)
+
+    _recurse(model)
+    avg_ratio = round(total_compression / max(1, layers_quantized), 3) if layers_quantized else 1.0
+    return {
+        "model": model,
+        "layers_quantized": layers_quantized,
+        "group_size": int(group_size),
+        "avg_compression_ratio": avg_ratio,
     }

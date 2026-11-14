@@ -1,7 +1,9 @@
 """Async httpx SDK client, Pydantic schemas, binary VPC framing, dynamic batcher & circuit-breaker escalation."""
 from __future__ import annotations
 
+import asyncio
 import importlib
+import inspect
 import json
 import struct
 import time
@@ -118,17 +120,21 @@ def decode_binary_frame(frame: bytes) -> dict[str, Any]:
 
 
 class DynamicBatchCoalescer:
-    """Coalesces multiple document inputs into bounded micro-batches and preserves per-item ordering."""
+    """Coalesces multiple document inputs into bounded micro-batches (sync or time-windowed async)."""
 
     def __init__(
         self,
         batch_fn: Callable[[list[str]], list[dict[str, Any]]],
         *,
         max_batch_size: int = 16,
+        max_wait_ms: float = 10.0,
     ):
         self.batch_fn = batch_fn
         self.max_batch_size = max(1, int(max_batch_size))
+        self.max_wait_ms = max(0.0, float(max_wait_ms))
         self.batches_executed = 0
+        self._pending: list[tuple[str, asyncio.Future[dict[str, Any]]]] = []
+        self._flush_task: asyncio.Task[None] | None = None
 
     def process(self, items: list[str]) -> list[dict[str, Any]]:
         outputs: list[dict[str, Any]] = []
@@ -140,6 +146,55 @@ class DynamicBatchCoalescer:
             outputs.extend(res)
             self.batches_executed += 1
         return outputs
+
+    async def _flush_pending(self) -> None:
+        while self._pending:
+            batch = self._pending[: self.max_batch_size]
+            del self._pending[: self.max_batch_size]
+            chunk = [item for item, _ in batch]
+            futs = [fut for _, fut in batch]
+            try:
+                res_or_coro = await anyio.to_thread.run_sync(self.batch_fn, chunk)
+                if inspect.isawaitable(res_or_coro):
+                    res = await res_or_coro
+                else:
+                    res = res_or_coro
+                if len(res) != len(chunk):
+                    raise RuntimeError("Batch handler returned mismatched result count")
+                self.batches_executed += 1
+                for fut, out in zip(futs, res, strict=True):
+                    if not fut.done():
+                        fut.set_result(out)
+            except BaseException as exc:
+                for fut in futs:
+                    if not fut.done():
+                        fut.set_exception(exc)
+
+    async def _wait_and_flush(self) -> None:
+        try:
+            await asyncio.sleep(self.max_wait_ms / 1000.0)
+            await self._flush_pending()
+        finally:
+            self._flush_task = None
+            if self._pending:
+                self._flush_task = asyncio.create_task(self._wait_and_flush())
+
+    async def submit(self, item: str) -> dict[str, Any]:
+        """Enqueues a single item and awaits coalesced micro-batch execution."""
+        loop = asyncio.get_running_loop()
+        fut: asyncio.Future[dict[str, Any]] = loop.create_future()
+        self._pending.append((item, fut))
+        if len(self._pending) >= self.max_batch_size:
+            await self._flush_pending()
+        if self._pending and (self._flush_task is None or self._flush_task.done()):
+            self._flush_task = asyncio.create_task(self._wait_and_flush())
+        return await fut
+
+    async def process_async(self, items: list[str]) -> list[dict[str, Any]]:
+        """Concurrently submits all items and preserves per-item result order."""
+        if not items:
+            return []
+        return list(await asyncio.gather(*(self.submit(it) for it in items)))
 
 
 class HybridCircuitBreakerClient:

@@ -210,6 +210,7 @@ def create_app(
     api_key: str | None = None,
     strict_auth: bool | None = None,
     cors_origins: list[str] | None = None,
+    triage_state_path: str | Path | None = None,
 ):
     """Builds the hardened FastAPI application with dependency-injected bundles."""
     import fastapi
@@ -235,6 +236,17 @@ def create_app(
         ]
     )
 
+    resolved_triage_path: Path | None = None
+    raw_triage_path = triage_state_path if triage_state_path is not None else os.environ.get("NCM_TRIAGE_STATE_PATH")
+    if raw_triage_path:
+        resolved_triage_path = Path(raw_triage_path)
+
+    loaded_classifier = None
+    if resolved_triage_path is not None and resolved_triage_path.exists():
+        from ncm_bench.triage import ConceptClassifier
+
+        loaded_classifier = ConceptClassifier.load(resolved_triage_path)
+
     state: dict[str, Any] = {
         "bundle": bundle,
         "sudoku_bundle": sudoku_bundle,
@@ -247,7 +259,8 @@ def create_app(
         "latency_seconds_count": 0,
         "active_inferences": 0,
         "hist_buckets": {b: 0 for b in LATENCY_BUCKETS},
-        "triage_classifier": None,
+        "triage_classifier": loaded_classifier,
+        "triage_state_path": resolved_triage_path,
         "shutting_down": False,
     }
     model_lock = threading.Lock()
@@ -623,6 +636,9 @@ def create_app(
                 clf = ConceptClassifier()
                 state["triage_classifier"] = clf
             clf.partial_fit(sig, req.label)
+            save_path = state.get("triage_state_path")
+            if save_path is not None:
+                clf.save(save_path)
             return sorted(clf.centroids.keys())
 
         known_labels, latency_ms = await _run_serialized(_apply_feedback)
@@ -630,6 +646,7 @@ def create_app(
             "status": "updated",
             "label": req.label,
             "known_labels": known_labels,
+            "persisted": state.get("triage_state_path") is not None,
             "latency_ms": latency_ms,
         }
 

@@ -23,13 +23,114 @@ _PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("IBAN", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")),
     ("EMAIL", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
     ("SSN", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
+    ("MRN", re.compile(r"\bMRN[:\-\s]?\d{5,10}\b")),
     ("CARD", re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b")),
     ("PHONE", re.compile(r"(?<!\w)(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}(?!\w)")),
     ("IPV4", re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")),
 ]
 
 
-def extract_text_from_file(path: Path | str, *, ocr_fallback=None) -> str:
+def _check_archive_quota(zf: zipfile.ZipFile, max_archive_bytes: int) -> None:
+    total_size = sum(max(0, info.file_size) for info in zf.infolist())
+    if total_size > max_archive_bytes:
+        raise ValueError(
+            f"Archive uncompressed size ({total_size} bytes) exceeds max_archive_bytes={max_archive_bytes}"
+        )
+
+
+def _extract_docx_xml_text(xml_raw: str) -> str:
+    blocks: list[str] = []
+    # Extract structured tables row-by-row first, then remaining body text
+    table_pattern = re.compile(r"<w:tbl\b[^>]*>(.*?)</w:tbl>", flags=re.DOTALL)
+    pos = 0
+    for tbl_match in table_pattern.finditer(xml_raw):
+        before = xml_raw[pos : tbl_match.start()]
+        runs = re.findall(r"<w:t[^>]*>(.*?)</w:t>", before, flags=re.DOTALL)
+        if runs:
+            txt = " ".join(html.unescape(r) for r in runs if r.strip()).strip()
+            if txt:
+                blocks.append(txt)
+        for tr_xml in re.findall(r"<w:tr\b[^>]*>(.*?)</w:tr>", tbl_match.group(1), flags=re.DOTALL):
+            cells: list[str] = []
+            for tc_xml in re.findall(r"<w:tc\b[^>]*>(.*?)</w:tc>", tr_xml, flags=re.DOTALL):
+                tc_runs = re.findall(r"<w:t[^>]*>(.*?)</w:t>", tc_xml, flags=re.DOTALL)
+                cell_txt = " ".join(html.unescape(r).strip() for r in tc_runs if r.strip()).strip()
+                cells.append(cell_txt)
+            if any(cells):
+                blocks.append(" | ".join(cells))
+        pos = tbl_match.end()
+    tail = xml_raw[pos:]
+    tail_runs = re.findall(r"<w:t[^>]*>(.*?)</w:t>", tail, flags=re.DOTALL)
+    if tail_runs:
+        txt = " ".join(html.unescape(r) for r in tail_runs if r.strip()).strip()
+        if txt:
+            blocks.append(txt)
+    if blocks:
+        return "\n".join(blocks).strip()
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", xml_raw)).split()).strip()
+
+
+def _extract_xlsx_text(zf: zipfile.ZipFile) -> str:
+    names = sorted(zf.namelist())
+    shared: list[str] = []
+    if "xl/sharedStrings.xml" in names:
+        ss_xml = zf.read("xl/sharedStrings.xml").decode("utf-8", errors="replace")
+        si_blocks = re.findall(r"<si\b[^>]*>(.*?)</si>", ss_xml, flags=re.DOTALL)
+        if si_blocks:
+            for si in si_blocks:
+                parts = re.findall(r"<t[^>]*>(.*?)</t>", si, flags=re.DOTALL)
+                shared.append("".join(html.unescape(p) for p in parts).strip())
+        else:
+            vals = re.findall(r"<t[^>]*>(.*?)</t>", ss_xml, flags=re.DOTALL)
+            shared.extend(html.unescape(v).strip() for v in vals if v.strip())
+
+    used_shared_indices: set[int] = set()
+    lines: list[str] = []
+    for member in names:
+        if not member.startswith("xl/worksheets/sheet"):
+            continue
+        sheet_xml = zf.read(member).decode("utf-8", errors="replace")
+        row_blocks = re.findall(r"<row\b[^>]*>(.*?)</row>", sheet_xml, flags=re.DOTALL)
+        if row_blocks:
+            for row_xml in row_blocks:
+                row_vals: list[str] = []
+                for attrs, body in re.findall(r"<c\b([^>]*)>(.*?)</c>", row_xml, flags=re.DOTALL):
+                    v_match = re.search(r"<v>(.*?)</v>", body, flags=re.DOTALL)
+                    if re.search(r'\bt=["\']s["\']', attrs) and v_match is not None:
+                        try:
+                            s_idx = int(v_match.group(1).strip())
+                            if 0 <= s_idx < len(shared):
+                                used_shared_indices.add(s_idx)
+                                if shared[s_idx]:
+                                    row_vals.append(shared[s_idx])
+                                continue
+                        except ValueError:
+                            pass
+                    t_parts = re.findall(r"<t[^>]*>(.*?)</t>", body, flags=re.DOTALL)
+                    if t_parts:
+                        val = "".join(html.unescape(p) for p in t_parts).strip()
+                        if val:
+                            row_vals.append(val)
+                    elif v_match is not None:
+                        val = html.unescape(v_match.group(1)).strip()
+                        if val:
+                            row_vals.append(val)
+                if row_vals:
+                    lines.append(" | ".join(row_vals))
+        else:
+            vals = re.findall(r"<v>(.*?)</v>", sheet_xml, flags=re.DOTALL)
+            lines.extend(html.unescape(v).strip() for v in vals if v.strip())
+
+    unreferenced_shared = [s for idx, s in enumerate(shared) if idx not in used_shared_indices and s]
+    return "\n".join(unreferenced_shared + lines).strip()
+
+
+def extract_text_from_file(
+    path: Path | str,
+    *,
+    ocr_fallback=None,
+    max_archive_bytes: int = 50 * 1024 * 1024,
+) -> str:
     """Extracts UTF-8 plain text from .txt, .md, .json/.jsonl, .html, .csv, .eml, .docx, .xlsx, or .pdf files locally."""
     p = Path(path)
     if not p.exists():
@@ -47,25 +148,14 @@ def extract_text_from_file(path: Path | str, *, ocr_fallback=None) -> str:
 
     if suffix == ".docx":
         with zipfile.ZipFile(p, "r") as zf:
+            _check_archive_quota(zf, max_archive_bytes)
             xml_raw = zf.read("word/document.xml").decode("utf-8", errors="replace")
-        runs = re.findall(r"<w:t[^>]*>(.*?)</w:t>", xml_raw, flags=re.DOTALL)
-        if runs:
-            return " ".join(html.unescape(r) for r in runs if r.strip()).strip()
-        return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", xml_raw)).split()).strip()
+        return _extract_docx_xml_text(xml_raw)
 
     if suffix == ".xlsx":
-        extracted_cells: list[str] = []
         with zipfile.ZipFile(p, "r") as zf:
-            names = sorted(zf.namelist())
-            for member in names:
-                if member == "xl/sharedStrings.xml" or member.startswith("xl/worksheets/sheet"):
-                    xml_raw = zf.read(member).decode("utf-8", errors="replace")
-                    if member == "xl/sharedStrings.xml":
-                        vals = re.findall(r"<t[^>]*>(.*?)</t>", xml_raw, flags=re.DOTALL)
-                    else:
-                        vals = re.findall(r"<v>(.*?)</v>", xml_raw, flags=re.DOTALL)
-                    extracted_cells.extend(html.unescape(v).strip() for v in vals if v.strip())
-        return " ".join(extracted_cells).strip()
+            _check_archive_quota(zf, max_archive_bytes)
+            return _extract_xlsx_text(zf)
 
     raw = p.read_text(encoding="utf-8", errors="replace")
     if suffix in {".html", ".htm"}:
@@ -110,8 +200,8 @@ def extract_text_from_file(path: Path | str, *, ocr_fallback=None) -> str:
     return raw.strip()
 
 
-def redact_pii(text: str) -> tuple[str, dict[str, str]]:
-    """Replaces common PII/PHI spans with deterministic typed placeholders for local scrubbing."""
+def redact_pii(text: str, *, ner_fn=None) -> tuple[str, dict[str, str]]:
+    """Replaces PII/PHI/secret spans via regex + optional NER hook with deterministic placeholders."""
     mapping: dict[str, str] = {}
     counters: dict[str, int] = {}
     scrubbed = text
@@ -126,6 +216,18 @@ def redact_pii(text: str) -> tuple[str, dict[str, str]]:
             return token
 
         scrubbed = pattern.sub(_repl, scrubbed)
+
+    if ner_fn is not None:
+        for raw_label, raw_span in ner_fn(scrubbed):
+            span = str(raw_span)
+            lbl = str(raw_label).upper().strip() or "ENTITY"
+            if span and span in scrubbed and not span.startswith("["):
+                idx = counters.get(lbl, 0) + 1
+                counters[lbl] = idx
+                token = f"[{lbl}_{idx}]"
+                mapping[token] = span
+                scrubbed = scrubbed.replace(span, token, 1)
+
     return scrubbed, mapping
 
 

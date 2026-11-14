@@ -121,6 +121,8 @@ class AuditSinkSQLite:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(self.db_path) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA busy_timeout=5000;")
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS audit_chain ("
                 "seq INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -162,19 +164,22 @@ class AuditSinkSQLite:
             for seq, ts, prev_h, row_h, payload in rows
         ]
 
-    def verify_chain(self) -> bool:
+    def verify_chain(self, *, batch_size: int = 500) -> bool:
         expected_prev = "GENESIS"
+        chunk_sz = max(1, int(batch_size))
         with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                "SELECT prev_hash, row_hash, payload_json FROM audit_chain ORDER BY seq ASC"
-            ).fetchall()
-        for prev_h, row_h, payload in rows:
-            if not hmac.compare_digest(str(prev_h), expected_prev):
-                return False
-            recomputed = hashlib.sha256(f"{prev_h}:{payload}".encode("utf-8")).hexdigest()
-            if not hmac.compare_digest(str(row_h), recomputed):
-                return False
-            expected_prev = str(row_h)
+            cursor = conn.execute("SELECT prev_hash, row_hash, payload_json FROM audit_chain ORDER BY seq ASC")
+            while True:
+                rows = cursor.fetchmany(chunk_sz)
+                if not rows:
+                    break
+                for prev_h, row_h, payload in rows:
+                    if not hmac.compare_digest(str(prev_h), expected_prev):
+                        return False
+                    recomputed = hashlib.sha256(f"{prev_h}:{payload}".encode("utf-8")).hexdigest()
+                    if not hmac.compare_digest(str(row_h), recomputed):
+                        return False
+                    expected_prev = str(row_h)
         return True
 
 
@@ -183,25 +188,81 @@ def _derive_stream_and_mac_keys(key_bytes: bytes, nonce: bytes, length: int) -> 
     return dk[:length], dk[length:]
 
 
-def encrypt_field_envelope(plaintext: str, key: str | bytes) -> dict[str, str]:
-    """Encrypts and authenticates sensitive text using PBKDF2-SHA256 stream + HMAC-SHA256 tag."""
+def _resolve_envelope_key(key: str | bytes | dict[str, str | bytes], key_id: str) -> bytes:
+    if isinstance(key, dict):
+        if key_id not in key:
+            raise ValueError(f"Unknown key_id: {key_id}")
+        raw = key[key_id]
+    else:
+        raw = key
+    return raw.encode("utf-8") if isinstance(raw, str) else bytes(raw)
+
+
+def encrypt_field_envelope(
+    plaintext: str,
+    key: str | bytes,
+    *,
+    key_id: str = "default",
+) -> dict[str, str]:
+    """Encrypts and authenticates sensitive text using AES-256-GCM AEAD (or PBKDF2-HMAC fallback)."""
     pt_bytes = plaintext.encode("utf-8")
     key_bytes = key.encode("utf-8") if isinstance(key, str) else bytes(key)
-    nonce = os.urandom(16)
-    stream, mac_key = _derive_stream_and_mac_keys(key_bytes, nonce, len(pt_bytes))
-    ct_bytes = bytes(b ^ s for b, s in zip(pt_bytes, stream, strict=True)) if pt_bytes else b""
-    tag = hmac.new(mac_key, nonce + ct_bytes, hashlib.sha256).hexdigest()
-    return {
-        "alg": "PBKDF2-SHA256-HMAC",
-        "nonce": nonce.hex(),
-        "ciphertext": ct_bytes.hex(),
-        "tag": tag,
-    }
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        salt = os.urandom(16)
+        nonce = os.urandom(12)
+        aes_key = hashlib.pbkdf2_hmac("sha256", key_bytes, salt, 100_000, dklen=32)
+        sealed = AESGCM(aes_key).encrypt(nonce, pt_bytes, key_id.encode("utf-8"))
+        ct_body, gcm_tag = sealed[:-16], sealed[-16:]
+        return {
+            "alg": "AES-256-GCM",
+            "key_id": key_id,
+            "salt": salt.hex(),
+            "nonce": nonce.hex(),
+            "ciphertext": ct_body.hex(),
+            "tag": gcm_tag.hex(),
+        }
+    except ImportError:
+        nonce = os.urandom(16)
+        stream, mac_key = _derive_stream_and_mac_keys(key_bytes, nonce, len(pt_bytes))
+        ct_bytes = bytes(b ^ s for b, s in zip(pt_bytes, stream, strict=True)) if pt_bytes else b""
+        tag = hmac.new(mac_key, nonce + ct_bytes, hashlib.sha256).hexdigest()
+        return {
+            "alg": "PBKDF2-SHA256-HMAC",
+            "key_id": key_id,
+            "nonce": nonce.hex(),
+            "ciphertext": ct_bytes.hex(),
+            "tag": tag,
+        }
 
 
-def decrypt_field_envelope(envelope: dict[str, str], key: str | bytes) -> str:
-    """Verifies envelope integrity before decrypting field ciphertext."""
-    key_bytes = key.encode("utf-8") if isinstance(key, str) else bytes(key)
+def decrypt_field_envelope(
+    envelope: dict[str, str],
+    key: str | bytes | dict[str, str | bytes],
+) -> str:
+    """Verifies envelope integrity before decrypting field ciphertext (supports key rings & legacy fallback)."""
+    key_id = str(envelope.get("key_id", "default"))
+    key_bytes = _resolve_envelope_key(key, key_id)
+    alg = str(envelope.get("alg", "PBKDF2-SHA256-HMAC"))
+
+    if alg == "AES-256-GCM":
+        from cryptography.exceptions import InvalidTag
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        try:
+            salt = bytes.fromhex(envelope["salt"])
+            nonce = bytes.fromhex(envelope["nonce"])
+            ct_body = bytes.fromhex(envelope["ciphertext"])
+            gcm_tag = bytes.fromhex(envelope["tag"])
+            if len(gcm_tag) != 16:
+                raise ValueError("Envelope authentication failed")
+            aes_key = hashlib.pbkdf2_hmac("sha256", key_bytes, salt, 100_000, dklen=32)
+            pt_bytes = AESGCM(aes_key).decrypt(nonce, ct_body + gcm_tag, key_id.encode("utf-8"))
+            return pt_bytes.decode("utf-8")
+        except (InvalidTag, ValueError, KeyError) as exc:
+            raise ValueError("Envelope authentication failed") from exc
+
     nonce = bytes.fromhex(envelope["nonce"])
     ct_bytes = bytes.fromhex(envelope["ciphertext"])
     stream, mac_key = _derive_stream_and_mac_keys(key_bytes, nonce, len(ct_bytes))

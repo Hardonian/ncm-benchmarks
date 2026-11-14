@@ -106,30 +106,67 @@ def inject_concept_lora(
     *,
     rank: int = 4,
     alpha: float = 8.0,
+    target_modules: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
-    """Freezes backbone weights and injects ConceptLoRALinear adapters into top-level Linear submodules."""
+    """Freezes backbone weights and recursively injects ConceptLoRALinear adapters into nn.Linear submodules."""
     for p in model.parameters():
         p.requires_grad = False
 
     replaced = 0
-    for name, module in list(model.named_children()):
-        if isinstance(module, nn.Linear):
-            setattr(model, name, ConceptLoRALinear(module, rank=rank, alpha=alpha))
-            replaced += 1
-        elif isinstance(module, nn.ModuleList):
-            for idx, sub in enumerate(module):
-                if isinstance(sub, nn.Linear):
-                    module[idx] = ConceptLoRALinear(sub, rank=rank, alpha=alpha)
-                    replaced += 1
+    replaced_paths: list[str] = []
+
+    def _matches(module_name: str) -> bool:
+        if target_modules is None:
+            return True
+        return any(tok in module_name for tok in target_modules)
+
+    def _recurse(parent: nn.Module, prefix: str = "") -> None:
+        nonlocal replaced
+        if isinstance(parent, ConceptLoRALinear):
+            return
+        for name, child in list(parent.named_children()):
+            full_name = f"{prefix}.{name}" if prefix else name
+            if isinstance(child, ConceptLoRALinear):
+                continue
+            if isinstance(child, nn.Linear) and _matches(full_name):
+                setattr(parent, name, ConceptLoRALinear(child, rank=rank, alpha=alpha))
+                replaced += 1
+                replaced_paths.append(full_name)
+            else:
+                _recurse(child, full_name)
+
+    _recurse(model)
 
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total_params = sum(p.numel() for p in model.parameters())
     return {
         "model": model,
         "adapters_injected": replaced,
+        "adapter_paths": replaced_paths,
         "trainable_params": trainable_params,
         "total_params": total_params,
     }
+
+
+def extract_lora_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
+    """Extracts only trainable LoRA adapter tensors (lora_a / lora_b) for compact serialization."""
+    return {
+        name: param.detach().cpu().clone()
+        for name, param in model.named_parameters()
+        if "lora_a" in name or "lora_b" in name
+    }
+
+
+def load_lora_state_dict(model: nn.Module, state_dict: dict[str, torch.Tensor]) -> int:
+    """Loads saved LoRA adapter tensors back into matching model parameters, returning loaded tensor count."""
+    params = dict(model.named_parameters())
+    loaded = 0
+    with torch.no_grad():
+        for name, tensor in state_dict.items():
+            if name in params and params[name].shape == tensor.shape:
+                params[name].copy_(tensor.to(device=params[name].device, dtype=params[name].dtype))
+                loaded += 1
+    return loaded
 
 
 class RegexRewardPlugin:
