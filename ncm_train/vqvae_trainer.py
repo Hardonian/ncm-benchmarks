@@ -27,8 +27,6 @@ class Stage1Config:
     steps: int = 50
     lr: float = 3e-4
     vq_loss_weight: float = 1.0
-    ema_decay: float = 0.99
-    dropout: float = 0.1
     device: str = "cpu"
 
 
@@ -40,7 +38,7 @@ def build_vqvae_from_stage1_config(cfg: Stage1Config):
     vq_cfg = OmegaConf.create(
         {
             "clss": "multiscale_residual_vector_quantizer",
-            "decay": cfg.ema_decay,
+            "decay": 0.99,
             "epsilon": 1e-5,
             "commitment_cost": 0.25,
             "learned_l1_sampling": True,
@@ -57,7 +55,7 @@ def build_vqvae_from_stage1_config(cfg: Stage1Config):
         n_layers=cfg.n_layers,
         vector_quantizer_config=vq_cfg,
         compression_factor=1,
-        dropout=cfg.dropout,
+        dropout=0.1,
         pre_quant_groupnorm=4,
         pre_quant_norm_type="group",
         use_qk_norm=True,
