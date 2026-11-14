@@ -5,6 +5,7 @@ All notable changes to `ncm-benchmarks` are documented in this file.
 ## [3.0.0] - 2026-11-14
 
 ### Added & Hardened
+
 - **LUT-Accelerated `Int4Linear` (`ncm_bench/accel.py`)**: Replaced slice mutation bitshifts with a vectorized `(256, 2)` int8 nibble lookup table (`_build_nibble_lut`), added `Int4Linear.from_linear(..., cache_dequantized=...)`, and hardened `probe_accelerator_capabilities()` to gracefully fall back to CPU if an accelerator driver fails.
 - **Pluggable KMS & WAL SQLite Compliance (`ncm_bench/compliance.py`)**: Added `KeyManagementProvider`, `LocalKeyringProvider`, `EnvKMSProvider`, and `ExternalKMSHookProvider` (DEK envelope wrapping) on top of `AES-256-GCM` key rotation, `WAL`-mode `AuditSinkSQLite`, and batched `verify_chain(batch_size=...)`.
 - **Multi-Worker `SQLiteClassifierStore` & Hybrid Triage (`ncm_bench/triage.py`, `service/summarize_server.py`)**: Added atomic `WAL`-mode `SQLiteClassifierStore` (auto-selected for `.db`/`.sqlite` `NCM_TRIAGE_STATE_PATH`), JSON persistence for `/triage/feedback`, async time-windowed `DynamicBatchCoalescer`, and hybrid lexical+concept scoring (`+16.66 pp` to `58.33%` top-1 on paraphrased triage).
@@ -14,14 +15,17 @@ All notable changes to `ncm-benchmarks` are documented in this file.
 - **Full Helm Chart & Release Packaging (`deploy/helm/ncm-benchmarks/`, `pyproject.toml`)**: Added complete Kubernetes Helm templates (`deployment.yaml`, `service.yaml`, `hpa.yaml`, `networkpolicy.yaml`), synced `cryptography>=42.0.0` optional extras, and bumped all charts, server API, and package metadata to `3.0.0`.
 
 ## [2.2.0] - 2026-11-13
+
 - Completed all 100 items across all 10 pillars in `docs/ROADMAP-100.md` (Detached Ed25519/Schnorr receipts, Merkle evidence bundles, JSON grammar FSM, DPLL constraint solver, ONNX manifests, AsyncNCMClient, TypeScript SDK, Grafana dashboard, Nix flake, DevContainer, and `.pyz` offline bundle).
 
 ## [2.1.0] - 2026-11-13
+
 - Multi-format ingestion (`.html`, `.csv`, `.eml`), `API_KEY`/`IBAN` redaction, HMAC-SHA256 audit receipts, Concept-DPO training, `/triage/feedback` online adaptation, CVE/IP extraction, and V100/EPYC multi-dataset scaling receipts.
 
 ## [2.0.0] - 2026-11-12
 
 ### Added
+
 - **Zero-Pickle Safetensors Support (`ncm_bench/inference.py`, `ncm-bench convert-safetensors`)**: Added `export_safetensors()` and preference for `.safetensors` + `inference_meta.json` inside `load_bundle()`, eliminating runtime pickle deserialization once converted. Verified on both `xsum` and `sudoku/hard` checkpoints.
 - **Strict Fail-Closed Integrity (`verify_file_integrity(..., strict=True)`)**: Added `--strict-checksums` (and `NCM_STRICT_CHECKSUMS=1` in Docker Compose) so missing `SHA256SUMS` or unlisted weights hard-fail instead of warning.
 - **Device & Dtype Agility**: Added Apple Silicon `mps` auto-detection in `resolve_device()`, `--dtype` (`fp32`, `fp16`, `bf16`), and `--compile` (`torch.compile`) support.
@@ -38,10 +42,11 @@ All notable changes to `ncm-benchmarks` are documented in this file.
   - Expanded `.github/workflows/ci.yml` with OS/Python matrix and `--cov-fail-under=70`.
 
 ### Measured On-Hardware Checks (`results/hx370-cpu/reality_checks.json`)
+
 - **XSum Paired FP32 vs INT8 (`n=32`, CPU `bs=8`)**: FP32 ROUGE `34.61 / 12.98 / 27.89` (`55.93s`) vs INT8 ROUGE `34.23 / 11.41 / 27.65` (`33.26s`) — **-0.24 pp ROUGE-L** at **1.68x speedup**.
 - **Sudoku-Hard (`n=100`, CPU)**: Greedy (`84.0%`, `18.93s`) -> Greedy+Repair (`86.0%`, `18.85s`) -> Best-of-4+Bounded-Repair (**`91.0%`**, cell `98.47%`, `26.46s`).
 - **Live FastAPI E2E (INT8 `.safetensors`)**: `POST /summarize` (`1,036 ms`), `POST /longdoc_summarize` (`4,504 ms`, 4 chunks, 2 PII redactions, SHA-256 receipt), `POST /progressive_stream` (SSE OK).
 
 ## [0.1.0] - 2026-11-12
-- Initial V100-SXM2 full-corpus benchmarks, HX370 CPU baseline, MBR decoding, dynamic INT8, progressive concept decoder, and FastAPI service.
 
+- Initial V100-SXM2 full-corpus benchmarks, HX370 CPU baseline, MBR decoding, dynamic INT8, progressive concept decoder, and FastAPI service.
