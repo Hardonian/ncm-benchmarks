@@ -1,0 +1,41 @@
+{
+  "concurrent": {
+    "all_receipt_checks_pass": 4,
+    "attempted": 4,
+    "errors": [],
+    "http_200": 4,
+    "latency_max_seconds": 30.572622,
+    "latency_mean_seconds": 19.098103,
+    "latency_min_seconds": 7.629186,
+    "wall_seconds": 30.581095
+  },
+  "cpu_affinity": [
+    24,
+    25,
+    26,
+    27
+  ],
+  "device": "cpu",
+  "ended_utc": "2026-11-14T02:08:24.936289+00:00",
+  "notes": [
+    "No independent proof of zero network egress.",
+    "Server serializes inference; concurrent latencies include queuing.",
+    "Synthetic input; no clinical correctness evaluation.",
+    "Receipt integrity validated but PII redaction not established; observed example reported zero redactions."
+  ],
+  "quantize": "int8",
+  "sequential": {
+    "all_receipt_checks_pass": 40,
+    "attempted": 40,
+    "errors": [],
+    "http_200": 40,
+    "latency_max_seconds": 8.349877,
+    "latency_mean_seconds": 7.76361,
+    "latency_min_seconds": 7.596235,
+    "wall_seconds": 310.679047
+  },
+  "source_commit": "e17fa93028da34966409562caeb5d5d35189f1c5",
+  "started_utc": "2026-11-14T02:02:34.686509+00:00",
+  "status": "completed synthetic load test; not a clinical or privacy validation",
+  "threads": 4
+}
