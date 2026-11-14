@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import pickle
 import sys
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -162,7 +163,7 @@ def test_concept_classifier_and_validation_repair():
     assert "2026-12-01" in repaired["entities"]["dates"]
 
 
-def test_extract_structured_triage_endpoint_and_cli(capsys):
+def test_extract_structured_triage_endpoint_and_cli(capsys, tmp_path):
     bundle = _fake_bundle()
     sample = (
         "Urgent security breach CVE vulnerability noticed by alice@corp.com involving $120,000 on 2026-11-12. "
@@ -216,3 +217,23 @@ def test_extract_structured_triage_endpoint_and_cli(capsys):
                 cli_out = json.loads(capsys.readouterr().out)
                 assert cli_out["schema_valid"] is True
                 assert cli_out["category"] == "security"
+
+    # CLI early-exit-bench check (self-contained without repo data/ mount for CI)
+    data_dir = tmp_path / "data" / "xsum"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    with open(data_dir / "passages.pickle", "wb") as f:
+        pickle.dump(["Doc one", "Doc two"], f)
+
+    with patch("ncm_bench.cli.ROOT_DIR", tmp_path):
+        with patch("ncm_bench.cli._load_bundle_for_args", return_value=bundle):
+            with patch("ncm_bench.inference.summarize_texts", return_value=["Doc summary", "Doc summary"]):
+                with patch.object(
+                    sys,
+                    "argv",
+                    ["ncm-bench", "early-exit-bench", "--n", "2", "--max-level", "1"],
+                ):
+                    main()
+                    bench_out = json.loads(capsys.readouterr().out)
+                    assert bench_out["n"] == 2
+                    assert bench_out["passes_early_exit"] == 2
+                    assert bench_out["passes_full"] == 4

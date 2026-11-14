@@ -5,11 +5,11 @@
     "max_level": 2,
     "passes_early_exit": 3,
     "passes_full": 9,
-    "early_exit_total_s": 3.1772,
-    "early_exit_per_doc_ms": 397.15,
-    "full_decode_total_s": 9.6279,
-    "full_decode_per_doc_ms": 1203.49,
-    "speedup": 3.03
+    "early_exit_total_s": 2.8482,
+    "early_exit_per_doc_ms": 356.02,
+    "full_decode_total_s": 9.641,
+    "full_decode_per_doc_ms": 1205.13,
+    "speedup": 3.38
   },
   "triage_sample": {
     "category": "security",

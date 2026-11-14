@@ -69,6 +69,16 @@ def main() -> None:
         restore=True,
     )
 
+    skip_ids = {t for t in (bundle.get("EOS"), bundle.get("PAD"), 50256, 50257) if t is not None}
+
+    def _decode_item(item) -> str:
+        if isinstance(item, (list, tuple)):
+            clean = [int(t) for t in item if int(t) not in skip_ids]
+            if bundle.get("src") is not None and hasattr(bundle["src"], "decode"):
+                return bundle["src"].decode(clean, skip_special_tokens=True).strip()
+            return bundle["tk"].pre_tokenizer.decode(clean, skip_special_tokens=True).strip()
+        return str(item).strip()
+
     demo_examples = []
     for idx in range(3):
         prog = progressive_decode(bundle, passages[idx], temperature=0.0, use_penalties=True)
@@ -76,8 +86,8 @@ def main() -> None:
             {
                 "id": f"xsum-{idx}",
                 "title": f"XSum Article #{idx + 1}",
-                "passage": passages[idx][:1200],
-                "reference": refs[idx],
+                "passage": _decode_item(passages[idx])[:1800],
+                "reference": _decode_item(refs[idx]),
                 "final_summary": prog["final_summary"],
                 "levels": prog["levels"],
             }

@@ -42,6 +42,7 @@ All figures measured and recorded in [`results/`](results/) across a consumer **
 | **Sudoku-Hard Reasoning** (2,000 boards) | 86.1% solved (Paper H100) | **`86.30%`** solved on V100<br>**`91.0%`** on CPU with Best-of-4 + Repair | **+7.0 pp breakthrough** over greedy baselines via bounded constraint search. |
 | **Zero-Pickle Safetensors + INT8** | FP32 Python Pickles (untrusted code) | **`1.68x` CPU Speedup** (`33.26s` vs `55.93s`) at **-0.24 pp R-L** | Strict SHA-256 weight integrity, air-gapped security, sub-second latency. |
 | **Consensus Decoding (MBR $N=4$)** | Greedy single-shot draft | **+1.82 ROUGE-L** (`25.26 → 27.08`)<br>+2.54 ROUGE-1 | Minimum Bayes Risk draft-selection beats single pass without retraining. |
+| **Coarse Early-Exit (`L0..L2`)** | Full `L0..L8` generation | **`3.38x` CPU Speedup** (`356.02 ms` vs `1205.13 ms/doc`) | Skip fine levels for rapid routing, deduplication &amp; schema triage (`results/hx370-cpu/frontier_checks.json`). |
 | **Marginal Unit Economics** | Cloud APIs: $0.003–$0.02 / doc | **`$0.0000` Marginal Cost** on existing hardware | **Zero per-token billing**, zero third-party data egress, zero GPU cluster requirements. |
 
 ---
@@ -63,6 +64,12 @@ ncm-bench mbr --text "Long legal brief or financial report..." --candidates 4
 
 # Offline long-document chunking, PII scrubbing, and cryptographic audit receipts
 ncm-bench summarize --input-file contract.pdf --long-doc --redact-pii --restore-pii --audit-receipt --json
+
+# Early-exit sovereign triage (Level 0..2 classification + Best-of-K schema-repaired extraction)
+ncm-bench triage --text "Urgent breach noticed by alice@corp.com ($480,000) on 2026-11-12" --labels finance,security,legal --max-level 2 --redact-pii --restore-pii --json
+
+# Benchmark early-exit Level 0..2 vs full Level 0..8 decoding
+ncm-bench early-exit-bench --n 8 --max-level 2 --quantize int8
 ```
 
 ### 3. Launch Local Sovereign API
@@ -96,11 +103,18 @@ ncm-bench serve --port 8031 --quantize int8
 ### 🧩 High-Reasoning Discrete Constraint Satisfaction
 NCM's discrete code generation excels at structured reasoning. By pairing NCM parallel generation with deterministic clue-clamping and bounded 64-node backtracking ([`repair_sudoku_board`](ncm_bench/inference.py)), **Sudoku-Hard accuracy reached 91.0%** on CPU (`98.47%` cell accuracy, Wilson 95% CI: `[83.77, 95.19]`).
 
-### 📦 Clean-Room Training Loops (`ncm_train/`)
-While upstream releases provided inference-only evaluation, `ncm-benchmarks` delivers fully verifiable clean-room training implementations:
-- **Stage-1**: Multiscale Residual Vector-Quantized Autoencoder (VQ-VAE).
-- **Stage-2**: Next-Concept Transformer generating hierarchical code levels.
-- Verified CPU loss convergence via `ncm-bench train-smoke` (`194.08 → 3.79` Stage-1 loss in 40 steps).
+### 📦 Clean-Room Training, Concept RL & Distillation (`ncm_train/`)
+
+While upstream releases provided inference-only evaluation, `ncm-benchmarks` delivers clean-room training, alignment, and distillation implementations:
+
+- **Stage-1 & Stage-2 Pretraining**: Multiscale Residual VQ-VAE + Next-Concept Transformer (`194.08 → 3.79` Stage-1 loss in 40 steps via `ncm-bench train-smoke`).
+- **Discrete Concept-Space GRPO / RLVR** ([`ncm_train/rl_distill.py`](ncm_train/rl_distill.py)): Group Relative Policy Optimization over discrete hierarchical codebooks (`+0.0938` reward delta `0.5820 → 0.6758` in 24 CPU steps via `ncm-bench rl-smoke`).
+- **Teacher-Student Concept Distillation**: KL-guided distillation in hierarchical concept space (`9.398 → 6.3534` loss in 20 CPU steps via `ncm-bench distill-smoke`).
+
+### 🔬 Interactive Progressive Visualizer & Early-Exit Triage
+
+- **Zero-Backend Explorer** ([`docs/index.html`](docs/index.html)): Inspect live Level `0..8` concept refinement over real XSum validations or connect directly to `ncm-bench serve` (`POST /progressive_summarize` and `POST /triage`).
+- **Sovereign Structured Triage** ([`ncm_bench/triage.py`](ncm_bench/triage.py)): Combines coarse `L0..L2` early-exit signatures (`ConceptIndex`, `ConceptClassifier`) with schema-validated Best-of-$K$ extraction, PII scrubbing/restoration, and `NCMClient.triage()`.
 
 ---
 
@@ -120,6 +134,10 @@ print(f"Summary: {result['summary']} ({result['latency_ms']} ms)")
 # Minimum Bayes Risk (MBR) consensus
 consensus = client.mbr_summarize("Complex research analysis...", num_candidates=4)
 print(f"Consensus: {consensus['summary']}")
+
+# Early-exit Level 0..2 classification + schema-validated extraction
+triaged = client.triage("Urgent invoice dispute for $12,000...", labels=["finance", "legal"])
+print(f"Category: {triaged['category']} (valid={triaged['schema_valid']})")
 ```
 
 ### High-Throughput Batch Triage
@@ -136,6 +154,8 @@ python scripts/batch_triage.py --input raw_docs.jsonl --output triaged.jsonl --e
 | :--- | :--- | :--- | :--- | :--- |
 | **Ryzen AI 9 HX 370 (CPU)** | XSum (FP32) | `2.34 s/doc` (marginal) | `27.89` ROUGE-L | [`results/hx370-cpu/`](results/hx370-cpu/) |
 | **Ryzen AI 9 HX 370 (CPU)** | XSum (INT8 Quantized) | `1.04 s/doc` (**1.68x speedup**) | `27.65` ROUGE-L | [`results/hx370-cpu/`](results/hx370-cpu/) |
+| **Ryzen AI 9 HX 370 (CPU)** | XSum Early-Exit (`L0..L2`, INT8) | **`356.02 ms/doc`** (`3.38x` vs `L0..L8`) | `3/9` concept passes | [`results/hx370-cpu/frontier_checks.json`](results/hx370-cpu/frontier_checks.json) |
+| **Ryzen AI 9 HX 370 (CPU)** | Concept GRPO / RLVR (24 steps) | Tiny clean-room smoke | **`+0.0938`** reward (`0.582→0.676`) | [`results/hx370-cpu/frontier_checks.json`](results/hx370-cpu/frontier_checks.json) |
 | **Ryzen AI 9 HX 370 (CPU)** | Sudoku-Hard (Greedy) | `18.93 s` (100 boards) | 84.0% solved | [`results/hx370-cpu/`](results/hx370-cpu/) |
 | **Ryzen AI 9 HX 370 (CPU)** | Sudoku-Hard (Best-of-4 + Repair) | `26.46 s` (100 boards) | **91.0% solved** | [`results/hx370-cpu/`](results/hx370-cpu/) |
 | **Tesla V100-SXM2 (16GB)** | XSum Full Census (11,334 docs) | **`9.47 docs/sec`** (`0.097 s/doc`) | `27.93` ROUGE-L | [`results/v100-sxm2/`](results/v100-sxm2/) |

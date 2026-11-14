@@ -412,8 +412,8 @@
 
           const ee = demoData.early_exit || {};
           const pill = document.getElementById('early-exit-pill');
-          if (ee.speedup_vs_full) {
-            pill.textContent = 'Early-Exit L0..L' + ee.max_level + ': ' + ee.speedup_vs_full.toFixed(2) + 'x faster (' + ee.coarse_ms.toFixed(1) + ' ms)';
+          if (ee.speedup) {
+            pill.textContent = 'Early-Exit L0..L' + ee.max_level + ': ' + Number(ee.speedup).toFixed(2) + 'x faster (' + Number(ee.early_exit_per_doc_ms).toFixed(1) + ' ms)';
           } else {
             pill.textContent = 'Real XSum INT8 CPU';
           }
@@ -421,9 +421,9 @@
           const stats = document.getElementById('offline-metrics');
           stats.textContent = '';
           addStat(stats, 'XSum Examples', String(demoData.examples.length));
-          if (ee.coarse_ms !== undefined) addStat(stats, 'Coarse L0..L' + ee.max_level + ' Latency', ee.coarse_ms.toFixed(1) + ' ms');
-          if (ee.full_ms !== undefined) addStat(stats, 'Full L0..L8 Latency', ee.full_ms.toFixed(1) + ' ms');
-          if (ee.speedup_vs_full !== undefined) addStat(stats, 'Early-Exit Speedup', ee.speedup_vs_full.toFixed(2) + 'x');
+          if (ee.early_exit_per_doc_ms !== undefined) addStat(stats, 'Coarse L0..L' + ee.max_level + ' Latency', Number(ee.early_exit_per_doc_ms).toFixed(1) + ' ms');
+          if (ee.full_decode_per_doc_ms !== undefined) addStat(stats, 'Full L0..L8 Latency', Number(ee.full_decode_per_doc_ms).toFixed(1) + ' ms');
+          if (ee.speedup !== undefined) addStat(stats, 'Early-Exit Speedup', Number(ee.speedup).toFixed(2) + 'x');
 
           renderOffline();
         } catch (err) {
