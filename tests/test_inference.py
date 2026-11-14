@@ -179,3 +179,54 @@ def test_resolve_device_and_dtype_and_nested_load():
     assert resolve_dtype("fp16", "cpu") == torch.float32
 
 
+def test_decode_logits_with_frequency_and_adjacency_penalties_and_prefix_batch(tmp_path: Path):
+    from types import SimpleNamespace
+
+    from ncm_bench.inference import ensure_offline_env, prepare_prefix_batch
+
+    home = ensure_offline_env(tmp_path)
+    assert home == tmp_path.resolve()
+
+    class FakePreTokenizer:
+        eos_token_id = 2
+        pad_token_id = 0
+
+        def encode(self, _text):
+            return [4, 5]
+
+        def decode(self, ids, skip_special_tokens=True):
+            vocab = {4: "alpha", 5: "beta", 6: "gamma"}
+            return " ".join(vocab.get(i, "") for i in ids if not skip_special_tokens or i not in (0, 2)).strip()
+
+    # Batch of 1, sequence len 3, vocab 8: token 4 starts strong then triggers adjacency/freq penalty
+    logits = torch.full((1, 3, 8), -5.0)
+    logits[0, :, 4] = 4.0
+    logits[0, :, 5] = 3.5
+    logits[0, :, 6] = 3.0
+    allow = torch.zeros((1, 8))
+    allow[0, 5] = 1.0
+
+    bundle = {
+        "P": 4,
+        "EOS": 2,
+        "PAD": 0,
+        "device": "cpu",
+        "src": lambda text: {"input_ids": [4, 6] if text else []},
+        "tk": SimpleNamespace(pre_tokenizer=FakePreTokenizer()),
+        "freq": 5.0,
+        "mu": 2.0,
+        "allow": allow,
+        "adj": [4.0, 2, 0.5],
+        "cut_at_eos": True,
+    }
+    texts = decode_logits_to_texts(logits, bundle)
+    assert len(texts) == 1 and texts[0]
+
+    batch_src = prepare_prefix_batch(bundle, ["hello", [5, 6]])
+    assert batch_src.tolist() == [[4, 6, 0, 0], [5, 6, 0, 0]]
+
+    bundle["src"] = None
+    batch_pretok = prepare_prefix_batch(bundle, ["hello"])
+    assert batch_pretok.tolist() == [[4, 5, 0, 0]]
+
+

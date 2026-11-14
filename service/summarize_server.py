@@ -135,6 +135,23 @@ class TriageRequest(BaseModel):
     max_level: int = Field(default=2, ge=0, le=16)
     best_of_k: int = Field(default=3, ge=1, le=16)
     temperature: float = Field(default=0.5, ge=0.0, le=2.0)
+    coarse_only: bool = False
+    adaptive_compute: bool = False
+    redact_pii: bool = False
+    restore_pii: bool = False
+    audit_receipt: bool = False
+
+
+class BatchTriageRequest(BaseModel):
+    texts: list[str] = Field(..., min_length=1, max_length=64)
+    labels: list[str] | None = Field(default=None, max_length=32)
+    max_level: int = Field(default=2, ge=0, le=16)
+    best_of_k: int = Field(default=3, ge=1, le=16)
+    temperature: float = Field(default=0.5, ge=0.0, le=2.0)
+    coarse_only: bool = False
+    adaptive_compute: bool = False
+    deduplicate: bool = True
+    dedup_threshold: float = Field(default=0.90, ge=0.0, le=1.0)
     redact_pii: bool = False
     restore_pii: bool = False
     audit_receipt: bool = False
@@ -530,6 +547,8 @@ def create_app(
                 max_level=req.max_level,
                 best_of_k=req.best_of_k,
                 temperature=req.temperature,
+                coarse_only=req.coarse_only,
+                adaptive_compute=req.adaptive_compute,
                 redact=req.redact_pii,
                 restore=req.restore_pii,
             )
@@ -544,6 +563,40 @@ def create_app(
                 pii_redactions=res.get("pii_redactions", 0),
                 mode="triage",
             )
+        return res
+
+    @app.post("/batch_triage", dependencies=[Depends(require_auth)])
+    async def batch_triage_endpoint(req: BatchTriageRequest):
+        from ncm_bench.longdoc import build_audit_receipt
+        from ncm_bench.triage import batch_extract_structured_triage
+
+        res, latency_ms = await _run_serialized(
+            lambda b: batch_extract_structured_triage(
+                b,
+                req.texts,
+                labels=req.labels,
+                max_level=req.max_level,
+                best_of_k=req.best_of_k,
+                temperature=req.temperature,
+                coarse_only=req.coarse_only,
+                adaptive_compute=req.adaptive_compute,
+                deduplicate=req.deduplicate,
+                dedup_threshold=req.dedup_threshold,
+                redact=req.redact_pii,
+                restore=req.restore_pii,
+            )
+        )
+        res["latency_ms"] = latency_ms
+        if req.audit_receipt:
+            active_bundle = state["bundle"] or {}
+            for src_text, item in zip(req.texts, res["results"], strict=True):
+                item["audit_receipt"] = build_audit_receipt(
+                    src_text,
+                    item["summary"],
+                    active_bundle,
+                    pii_redactions=item.get("pii_redactions", 0),
+                    mode="batch_triage",
+                )
         return res
 
     @app.post("/summarize", dependencies=[Depends(require_auth)])

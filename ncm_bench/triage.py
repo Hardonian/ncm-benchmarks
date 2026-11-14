@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 from collections import Counter
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -234,19 +236,23 @@ def generate_coarse_codes(
 
 
 class ConceptIndex:
-    """Zero-embedding discrete concept index for semantic deduplication and nearest-neighbor lookup."""
+    """Zero-embedding inverted discrete concept index for semantic deduplication and nearest-neighbor lookup."""
 
     def __init__(self) -> None:
         self._items: list[tuple[str, dict[int, float], dict[str, Any]]] = []
+        self._postings: dict[int, list[tuple[int, float]]] = {}
 
     def __len__(self) -> int:
         return len(self._items)
 
     def add(self, doc_id: str, signature: dict[str, Any], *, metadata: dict[str, Any] | None = None) -> None:
-        hist = signature["histogram"]
+        hist = {int(k): float(v) for k, v in signature["histogram"].items()}
         meta = dict(metadata or {})
         meta.setdefault("concept_hash", signature.get("concept_hash", ""))
+        idx = len(self._items)
         self._items.append((doc_id, hist, meta))
+        for code_id, weight in hist.items():
+            self._postings.setdefault(code_id, []).append((idx, weight))
 
     def query(
         self,
@@ -256,11 +262,22 @@ class ConceptIndex:
         min_similarity: float = 0.0,
     ) -> list[dict[str, Any]]:
         target = signature["histogram"]
+        dots: dict[int, float] = {}
+        for code_id, w_q in target.items():
+            for doc_idx, w_d in self._postings.get(int(code_id), ()):
+                dots[doc_idx] = dots.get(doc_idx, 0.0) + float(w_q) * w_d
+
         scored: list[tuple[float, str, dict[str, Any]]] = []
-        for doc_id, hist, meta in self._items:
-            sim = _sparse_cosine(target, hist)
-            if sim >= min_similarity:
-                scored.append((sim, doc_id, meta))
+        if min_similarity <= 0.0:
+            for idx, (doc_id, _hist, meta) in enumerate(self._items):
+                sim = dots.get(idx, 0.0)
+                if sim >= min_similarity:
+                    scored.append((sim, doc_id, meta))
+        else:
+            for doc_idx, sim in dots.items():
+                if sim >= min_similarity:
+                    doc_id, _hist, meta = self._items[doc_idx]
+                    scored.append((sim, doc_id, meta))
         scored.sort(key=lambda item: item[0], reverse=True)
         return [
             {"doc_id": doc_id, "similarity": round(sim, 4), "metadata": meta}
@@ -270,6 +287,42 @@ class ConceptIndex:
     def is_duplicate(self, signature: dict[str, Any], *, threshold: float = 0.90) -> bool:
         hits = self.query(signature, top_k=1, min_similarity=threshold)
         return len(hits) > 0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serializes indexed concept histograms and metadata to a JSON-safe mapping."""
+        return {
+            "version": 1,
+            "items": [
+                {
+                    "doc_id": doc_id,
+                    "histogram": {str(k): v for k, v in hist.items()},
+                    "metadata": meta,
+                }
+                for doc_id, hist, meta in self._items
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ConceptIndex":
+        """Reconstructs a ConceptIndex and its inverted postings table from a dictionary."""
+        index = cls()
+        for item in payload.get("items", []):
+            hist = {int(k): float(v) for k, v in item["histogram"].items()}
+            index.add(
+                str(item["doc_id"]),
+                {"histogram": hist},
+                metadata=item.get("metadata"),
+            )
+        return index
+
+    def save(self, path: str | Path) -> None:
+        """Writes the serialized ConceptIndex to disk as UTF-8 JSON."""
+        Path(path).write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
+
+    @classmethod
+    def load(cls, path: str | Path) -> "ConceptIndex":
+        """Loads a serialized ConceptIndex from disk."""
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
 class ConceptClassifier:
@@ -419,8 +472,12 @@ def extract_structured_triage(
     max_level: int = 2,
     best_of_k: int = 3,
     temperature: float = 0.5,
+    coarse_only: bool = False,
+    adaptive_compute: bool = False,
+    adaptive_threshold: float = 0.75,
     redact: bool = False,
     restore: bool = False,
+    _precomputed_sig: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Runs early-exit coarse classification + parallel Best-of-K verified structured triage extraction."""
     target_labels = labels or DEFAULT_TRIAGE_LABELS
@@ -430,34 +487,54 @@ def extract_structured_triage(
         proc_text, pii_map = redact_pii(text)
 
     # 1) Early-exit coarse concept extraction (Levels 0..max_level)
-    coarse_sig = generate_coarse_codes(bundle, [proc_text], max_level=max_level)[0]
+    coarse_sig = (
+        _precomputed_sig
+        if _precomputed_sig is not None
+        else generate_coarse_codes(bundle, [proc_text], max_level=max_level, decode_preview=coarse_only)[0]
+    )
     if classifier is not None and classifier.centroids:
         route = classifier.predict_one(coarse_sig, text_hint=proc_text)
     else:
         route = _heuristic_route(proc_text, labels=target_labels)
 
-    # 2) Parallel Best-of-K candidate summaries scored by self-consistency + source entity overlap
-    if best_of_k <= 1:
-        candidates = summarize_texts(bundle, [proc_text], temperature=0.0)
+    # 2) Adaptive candidate generation or coarse-only early exit
+    if coarse_only:
+        candidates: list[str] = []
+        compute_tier = "coarse_early_exit"
+        preview = str(coarse_sig.get("preview_text", "")).strip()
+        if preview:
+            best_summary = preview
+        else:
+            best_summary = re.split(r"(?<=[.!?])\s+", proc_text.strip())[0][:240]
     else:
-        candidates = [summarize_texts(bundle, [proc_text], temperature=0.0)[0]]
-        if best_of_k > 1:
-            candidates.extend(
-                summarize_texts(bundle, [proc_text] * (best_of_k - 1), temperature=temperature)
-            )
+        eff_k = best_of_k
+        if adaptive_compute and best_of_k > 1 and not route["escalate"] and route["confidence"] >= adaptive_threshold:
+            eff_k = 1
+            compute_tier = "adaptive_fast_greedy"
+        else:
+            compute_tier = "greedy" if eff_k <= 1 else "consensus_best_of_k"
 
-    best_summary = candidates[0]
-    if len(candidates) > 1:
-        peer_totals = compute_pairwise_rouge_l(candidates)
-        scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
-        best_score = -1.0
-        for idx_c, cand in enumerate(candidates):
-            peer_sim = peer_totals[idx_c] / max(len(candidates) - 1, 1)
-            grounding = scorer.score(proc_text[:600], cand)["rougeL"].fmeasure
-            score = 0.7 * peer_sim + 0.3 * grounding
-            if score > best_score:
-                best_score = score
-                best_summary = cand
+        if eff_k <= 1:
+            candidates = summarize_texts(bundle, [proc_text], temperature=0.0)
+        else:
+            candidates = [summarize_texts(bundle, [proc_text], temperature=0.0)[0]]
+            if eff_k > 1:
+                candidates.extend(
+                    summarize_texts(bundle, [proc_text] * (eff_k - 1), temperature=temperature)
+                )
+
+        best_summary = candidates[0]
+        if len(candidates) > 1:
+            peer_totals = compute_pairwise_rouge_l(candidates)
+            scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
+            best_score = -1.0
+            for idx_c, cand in enumerate(candidates):
+                peer_sim = peer_totals[idx_c] / max(len(candidates) - 1, 1)
+                grounding = scorer.score(proc_text[:600], cand)["rougeL"].fmeasure
+                score = 0.7 * peer_sim + 0.3 * grounding
+                if score > best_score:
+                    best_score = score
+                    best_summary = cand
 
     if restore and pii_map:
         best_summary = restore_pii(best_summary, pii_map)
@@ -472,6 +549,7 @@ def extract_structured_triage(
         "early_exit_passes": coarse_sig["passes_executed"],
         "total_concept_levels": coarse_sig["total_levels"],
         "candidates_evaluated": len(candidates),
+        "compute_tier": compute_tier,
         "pii_redactions": len(pii_map),
     }
     return validate_and_repair_triage_record(
@@ -479,3 +557,81 @@ def extract_structured_triage(
         source_text=proc_text if not restore else text,
         allowed_labels=target_labels,
     )
+
+
+def batch_extract_structured_triage(
+    bundle: dict[str, Any],
+    texts: list[str],
+    *,
+    labels: list[str] | None = None,
+    classifier: ConceptClassifier | None = None,
+    max_level: int = 2,
+    best_of_k: int = 3,
+    temperature: float = 0.5,
+    coarse_only: bool = False,
+    adaptive_compute: bool = False,
+    deduplicate: bool = True,
+    dedup_threshold: float = 0.90,
+    redact: bool = False,
+    restore: bool = False,
+) -> dict[str, Any]:
+    """Batched coarse early-exit triage with semantic ConceptIndex deduplication."""
+    target_labels = labels or DEFAULT_TRIAGE_LABELS
+    proc_texts: list[str] = []
+    pii_maps: list[dict[str, str]] = []
+    for t in texts:
+        if redact:
+            red, pmap = redact_pii(t)
+            proc_texts.append(red)
+            pii_maps.append(pmap)
+        else:
+            proc_texts.append(t)
+            pii_maps.append({})
+
+    sigs = generate_coarse_codes(bundle, proc_texts, max_level=max_level, decode_preview=coarse_only)
+    index = ConceptIndex()
+    results: list[dict[str, Any]] = []
+    duplicates_skipped = 0
+
+    for i, raw_text in enumerate(texts):
+        if deduplicate and len(index) > 0:
+            hits = index.query(sigs[i], top_k=1, min_similarity=dedup_threshold)
+            if hits:
+                canon_idx = int(hits[0]["doc_id"])
+                cloned = dict(results[canon_idx])
+                cloned["concept_hash"] = sigs[i]["concept_hash"]
+                cloned["entities"] = _extract_entities(proc_texts[i] if not restore else raw_text)
+                cloned["pii_redactions"] = len(pii_maps[i])
+                cloned["duplicate_of"] = canon_idx
+                cloned["duplicate_similarity"] = hits[0]["similarity"]
+                cloned["candidates_evaluated"] = 0
+                cloned["compute_tier"] = "deduplicated_skip"
+                results.append(cloned)
+                duplicates_skipped += 1
+                continue
+
+        rec = extract_structured_triage(
+            bundle,
+            raw_text,
+            labels=target_labels,
+            classifier=classifier,
+            max_level=max_level,
+            best_of_k=best_of_k,
+            temperature=temperature,
+            coarse_only=coarse_only,
+            adaptive_compute=adaptive_compute,
+            redact=redact,
+            restore=restore,
+            _precomputed_sig=sigs[i],
+        )
+        rec["duplicate_of"] = None
+        rec["duplicate_similarity"] = 0.0
+        results.append(rec)
+        index.add(str(i), sigs[i])
+
+    return {
+        "results": results,
+        "count": len(results),
+        "unique_count": len(results) - duplicates_skipped,
+        "duplicates_skipped": duplicates_skipped,
+    }

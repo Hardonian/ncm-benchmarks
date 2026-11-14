@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import json
 import pickle
+import runpy
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -14,11 +16,13 @@ from ncm_bench.cli import main
 from ncm_bench.triage import (
     ConceptClassifier,
     ConceptIndex,
+    batch_extract_structured_triage,
     extract_structured_triage,
     generate_coarse_codes,
     validate_and_repair_triage_record,
 )
 from ncm_train import Stage1Config, Stage2Config, train_stage1_vqvae, train_stage2_ncm
+from service.client import NCMClient
 from service.summarize_server import create_app
 
 
@@ -237,3 +241,111 @@ def test_extract_structured_triage_endpoint_and_cli(capsys, tmp_path):
                     assert bench_out["n"] == 2
                     assert bench_out["passes_early_exit"] == 2
                     assert bench_out["passes_full"] == 4
+
+
+def test_inverted_concept_index_persistence_and_adaptive_batch_triage(tmp_path: Path, capsys):
+    bundle = _fake_bundle()
+    sigs = generate_coarse_codes(
+        bundle,
+        ["Security breach CVE", "Quarterly revenue budget"],
+        max_level=1,
+        decode_preview=True,
+    )
+    index = ConceptIndex()
+    index.add("d0", sigs[0], metadata={"tag": "sec"})
+    index.add("d1", sigs[1], metadata={"tag": "fin"})
+
+    hits_sparse = index.query(sigs[0], top_k=2, min_similarity=0.5)
+    assert hits_sparse[0]["doc_id"] == "d0"
+    hits_all = index.query(sigs[0], top_k=2, min_similarity=0.0)
+    assert len(hits_all) == 2
+
+    saved_path = tmp_path / "concept_index.json"
+    index.save(saved_path)
+    loaded = ConceptIndex.load(saved_path)
+    assert len(loaded) == 2
+    assert loaded.is_duplicate(sigs[0], threshold=0.95) is True
+
+    # coarse_only exits without calling summarize_texts
+    with patch("ncm_bench.triage.summarize_texts", side_effect=AssertionError("should not run full decode")):
+        coarse_res = extract_structured_triage(
+            bundle,
+            "Urgent CVE breach costing $50,000 on 2026-11-12.",
+            labels=["security", "finance"],
+            coarse_only=True,
+        )
+    assert coarse_res["candidates_evaluated"] == 0
+    assert coarse_res["compute_tier"] == "coarse_early_exit"
+    assert coarse_res["schema_valid"] is True
+
+    # adaptive_compute reduces best_of_k=3 down to greedy K=1 on high-confidence route
+    clf = ConceptClassifier(escalation_confidence=0.45).fit(
+        [sigs[0], {"histogram": {999: 1.0}, "concept_hash": "other", "passes_executed": 2}],
+        ["security", "finance"],
+    )
+    with patch("ncm_bench.triage.summarize_texts", return_value=["Adaptive fast summary."]) as mock_sum:
+        adapt_res = extract_structured_triage(
+            bundle,
+            "Security breach CVE notice",
+            labels=["security", "finance"],
+            classifier=clf,
+            max_level=1,
+            best_of_k=3,
+            adaptive_compute=True,
+            adaptive_threshold=0.70,
+        )
+    assert mock_sum.call_count == 1
+    assert adapt_res["candidates_evaluated"] == 1
+    assert adapt_res["compute_tier"] == "adaptive_fast_greedy"
+
+    # batch_extract_structured_triage deduplicates doc 2 against doc 0
+    docs = [
+        "Urgent security breach CVE audit required on 2026-11-12.",
+        "Quarterly tax budget revenue summary for Q4.",
+        "Urgent security breach CVE audit required on 2026-11-12.",
+    ]
+    with patch("ncm_bench.triage.summarize_texts", side_effect=lambda _b, txts, **kw: ["Summary ok."] * len(txts)):
+        batch_res = batch_extract_structured_triage(
+            bundle,
+            docs,
+            labels=["security", "finance"],
+            max_level=1,
+            best_of_k=1,
+            deduplicate=True,
+            dedup_threshold=0.95,
+        )
+    assert batch_res["count"] == 3
+    assert batch_res["duplicates_skipped"] == 1
+    assert batch_res["unique_count"] == 2
+    assert batch_res["results"][2]["duplicate_of"] == 0
+    assert batch_res["results"][2]["compute_tier"] == "deduplicated_skip"
+
+    # FastAPI /batch_triage + NCMClient.batch_triage
+    app = create_app(bundle)
+    client = TestClient(app)
+    with patch("ncm_bench.triage.summarize_texts", side_effect=lambda _b, txts, **kw: ["Endpoint summary."] * len(txts)):
+        resp = client.post(
+            "/batch_triage",
+            json={"texts": docs, "labels": ["security", "finance"], "best_of_k": 1, "audit_receipt": True},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["duplicates_skipped"] == 1
+    assert "audit_receipt" in body["results"][0]
+
+    sdk_client = NCMClient(base_url="http://127.0.0.1:8031")
+    with patch.object(sdk_client, "_request", return_value={"count": 2, "duplicates_skipped": 0}) as mock_req:
+        sdk_out = sdk_client.batch_triage(["a", "b"], coarse_only=True, adaptive_compute=True)
+        assert sdk_out["count"] == 2
+        assert mock_req.call_args[0][1] == "/batch_triage"
+
+    # Package entrypoint `python -m ncm_bench`
+    with patch("ncm_bench.cli._load_bundle_for_args", return_value=bundle):
+        with patch.object(
+            sys,
+            "argv",
+            ["ncm-bench", "triage", "--text", docs[0], "--coarse-only", "--json"],
+        ):
+            runpy.run_module("ncm_bench", run_name="__main__")
+            main_out = json.loads(capsys.readouterr().out)
+            assert main_out["compute_tier"] == "coarse_early_exit"

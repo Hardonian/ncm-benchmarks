@@ -680,6 +680,8 @@ def cmd_triage(args):
         max_level=args.max_level,
         best_of_k=args.best_of_k,
         temperature=args.temperature,
+        coarse_only=bool(getattr(args, "coarse_only", False)),
+        adaptive_compute=bool(getattr(args, "adaptive_compute", False)),
         redact=bool(args.redact_pii),
         restore=bool(args.restore_pii),
     )
@@ -904,6 +906,8 @@ def main():
     p_tri.add_argument("--max-level", type=int, default=2, help="Coarse concept exit level (0..8)")
     p_tri.add_argument("--best-of-k", type=int, default=3, help="Parallel candidates for schema/consensus scoring")
     p_tri.add_argument("--temperature", type=float, default=0.5)
+    p_tri.add_argument("--coarse-only", action="store_true", help="Exit after coarse Level 0..k without full generation")
+    p_tri.add_argument("--adaptive-compute", action="store_true", help="Use greedy decode when coarse confidence is high")
     p_tri.add_argument("--redact-pii", action="store_true")
     p_tri.add_argument("--restore-pii", action="store_true")
     p_tri.add_argument("--audit-receipt", action="store_true")
