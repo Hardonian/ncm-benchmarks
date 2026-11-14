@@ -7,7 +7,7 @@ import runpy
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import torch
 from fastapi.testclient import TestClient
@@ -17,6 +17,8 @@ from ncm_bench.triage import (
     ConceptClassifier,
     ConceptIndex,
     batch_extract_structured_triage,
+    clear_coarse_cache,
+    extract_entities_with_spans,
     extract_structured_triage,
     generate_coarse_codes,
     validate_and_repair_triage_record,
@@ -349,3 +351,71 @@ def test_inverted_concept_index_persistence_and_adaptive_batch_triage(tmp_path: 
             runpy.run_module("ncm_bench", run_name="__main__")
             main_out = json.loads(capsys.readouterr().out)
             assert main_out["compute_tier"] == "coarse_early_exit"
+
+
+def test_v21_entity_spans_cache_custom_schema_and_feedback():
+    src = (
+        "Alert CVE-2026-4242 on 10.20.30.40 ($1,500 budget) by 2026-12-01 "
+        "via ops@acme.io or https://acme.io/advisory"
+    )
+    spans = extract_entities_with_spans(src)
+    entities = {k: [item["value"] for item in v] for k, v in spans.items()}
+    assert "CVE-2026-4242" in entities["cves"]
+    assert "10.20.30.40" in entities["ips"]
+    assert "$1,500" in entities["money"]
+    assert "2026-12-01" in entities["dates"]
+    assert "ops@acme.io" in entities["emails"]
+    assert any(s["value"] == "CVE-2026-4242" and src[s["start"] : s["end"]] == "CVE-2026-4242" for s in spans["cves"])
+
+    bundle = _fake_bundle()
+    wrapped_gen = MagicMock(wraps=bundle["net"].generate)
+    bundle["net"].generate = wrapped_gen
+    clear_coarse_cache()
+
+    first = generate_coarse_codes(bundle, ["Cached incident telemetry"], max_level=1, use_cache=True)
+    second = generate_coarse_codes(bundle, ["Cached incident telemetry"], max_level=1, use_cache=True)
+    assert wrapped_gen.call_count == 1
+    assert first[0]["concept_hash"] == second[0]["concept_hash"]
+
+    clear_coarse_cache()
+    generate_coarse_codes(bundle, ["Cached incident telemetry"], max_level=1, use_cache=True)
+    assert wrapped_gen.call_count == 2
+
+    repaired = validate_and_repair_triage_record(
+        {
+            "summary": "",
+            "category": "security",
+            "priority": "INVALID",
+            "severity": "INVALID",
+            "custom_tag": "",
+            "entities": entities,
+        },
+        source_text=src,
+        allowed_labels=["security", "finance"],
+        required_fields=["summary", "custom_tag"],
+        custom_enums={"severity": ["p0", "p1"]},
+    )
+    assert repaired["severity"] == "p0"
+    assert repaired["custom_tag"] == "unspecified"
+    assert "entity_spans" in repaired
+
+    clf = ConceptClassifier()
+    sig = generate_coarse_codes(bundle, ["Unauthorized SSH brute force attempt"], max_level=1)[0]
+    clf.partial_fit(sig, "incident", lr=0.5)
+    clf.partial_fit(sig, "incident", lr=0.25)
+    pred = clf.predict_one(sig)
+    assert pred["label"] == "incident"
+
+    app = create_app(bundle)
+    client = TestClient(app)
+    fb_resp = client.post("/triage/feedback", json={"text": "SSH brute force detected", "label": "incident", "max_level": 1})
+    assert fb_resp.status_code == 200
+    fb_body = fb_resp.json()
+    assert fb_body["label"] == "incident"
+    assert "incident" in fb_body["known_labels"]
+
+    sdk = NCMClient(base_url="http://127.0.0.1:8031")
+    with patch.object(sdk, "_request", return_value={"status": "updated", "label": "incident"}) as mock_req:
+        out = sdk.triage_feedback("SSH brute force detected", "incident", max_level=1)
+        assert out["status"] == "updated"
+        assert mock_req.call_args[0][1] == "/triage/feedback"

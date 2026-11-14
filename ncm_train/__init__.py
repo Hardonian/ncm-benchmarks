@@ -7,14 +7,17 @@ upstream NCM checkpoints and NCM inference/evaluation pipelines.
 from ncm_train.ncm_trainer import Stage2Config, train_stage2_ncm
 from ncm_train.rl_distill import (
     DistillConfig,
+    DPOConfig,
     GRPOConfig,
     compute_concept_logprobs,
     distill_teacher_into_ncm,
+    train_stage2_dpo,
     train_stage2_grpo,
 )
 from ncm_train.vqvae_trainer import Stage1Config, train_stage1_vqvae
 
 __all__ = [
+    "DPOConfig",
     "DistillConfig",
     "GRPOConfig",
     "Stage1Config",
@@ -22,6 +25,7 @@ __all__ = [
     "compute_concept_logprobs",
     "distill_teacher_into_ncm",
     "train_stage1_vqvae",
+    "train_stage2_dpo",
     "train_stage2_grpo",
     "train_stage2_ncm",
 ]

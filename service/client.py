@@ -253,6 +253,14 @@ class NCMClient:
             json={"model": model, "messages": [{"role": "user", "content": prompt}]},
         )
 
+    def triage_feedback(self, text: str, label: str, *, max_level: int = 2) -> dict[str, Any]:
+        """Submits an analyst-corrected label to update the online ConceptClassifier via POST /triage/feedback."""
+        return self._request(
+            "POST",
+            "/triage/feedback",
+            json={"text": text, "label": label, "max_level": max_level},
+        )
+
     def batch_summarize(
         self,
         texts: list[str],

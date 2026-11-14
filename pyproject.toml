@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ncm-benchmarks"
-version = "2.0.0"
+version = "2.1.0"
 description = "Production benchmarks, hierarchical concept decoder, and sovereign inference engine for Next-Concept Modeling"
 readme = "README.md"
 authors = [

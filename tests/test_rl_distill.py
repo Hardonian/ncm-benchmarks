@@ -11,11 +11,13 @@ import torch
 from ncm_bench.cli import main
 from ncm_train import (
     DistillConfig,
+    DPOConfig,
     GRPOConfig,
     Stage1Config,
     Stage2Config,
     distill_teacher_into_ncm,
     train_stage1_vqvae,
+    train_stage2_dpo,
     train_stage2_grpo,
     train_stage2_ncm,
 )
@@ -121,3 +123,51 @@ def test_cli_rl_smoke_and_distill_smoke(tmp_path: Path, capsys) -> None:
         out = json.loads(raw[raw.index("{") :])
         assert out["steps"] == 4
         assert (ds_dir / "generator_distilled.pt").exists()
+
+
+def test_stage2_dpo_preference_optimization() -> None:
+    torch.manual_seed(11)
+    vocab = 16
+    seq_len = 16
+    sequences = torch.randint(0, vocab, (16, seq_len), dtype=torch.long)
+    prefixes = torch.randint(0, vocab, (16, seq_len), dtype=torch.long)
+
+    s1_cfg = Stage1Config(
+        in_vocab_size=vocab,
+        context_length=seq_len,
+        embed_dim=32,
+        levels=(2, 4, 8, 16),
+        vq_vocab_size=16,
+        n_layers=1,
+        batch_size=8,
+        steps=3,
+        device="cpu",
+    )
+    vqvae = train_stage1_vqvae(sequences, s1_cfg)["model"]
+    s2_cfg = Stage2Config(
+        prefix_len=seq_len,
+        n_layer=1,
+        n_head=2,
+        n_embd=32,
+        batch_size=8,
+        steps=3,
+        query_level0=True,
+        device="cpu",
+    )
+    policy = train_stage2_ncm(prefixes, sequences, vqvae, s1_cfg, s2_cfg)["model"]
+    with torch.no_grad():
+        chosen = policy.generate(None, prefixes, temperature=0.5, top_k=4)
+        rejected = policy.generate(None, prefixes, temperature=1.5, top_k=4)
+
+    dpo_out = train_stage2_dpo(
+        prefixes,
+        chosen,
+        rejected,
+        vqvae,
+        policy,
+        DPOConfig(batch_size=4, steps=4, lr=1e-4, beta=0.1, device="cpu", seed=11),
+    )
+    assert len(dpo_out["losses"]) == 4
+    assert isinstance(dpo_out["initial_loss"], float)
+    assert isinstance(dpo_out["final_loss"], float)
+    assert 0.0 <= dpo_out["preference_accuracy"] <= 1.0

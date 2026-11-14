@@ -140,3 +140,35 @@ def test_cli_translate_convert_and_train_smoke(tmp_path, capsys):
         assert (smoke_dir / "tokenizer.pt").exists()
         assert (smoke_dir / "generator.pt").exists()
 
+
+def test_cli_report_json_and_html(tmp_path, capsys):
+    from ncm_bench.longdoc import build_audit_receipt
+
+    r1 = build_audit_receipt("Input doc 1", "Summary 1", {"EMAIL_1": "a@b.com"}, hmac_secret="k")
+    r2 = build_audit_receipt("Input doc 2", "Summary 2", {})
+    log_path = tmp_path / "audit.jsonl"
+    log_path.write_text(json.dumps(r1) + "\n" + json.dumps({"audit_receipt": r2}) + "\n", encoding="utf-8")
+
+    rep_json_path = tmp_path / "report.json"
+    with patch.object(sys, "argv", ["ncm-bench", "report", "--input", str(log_path), "--output-file", str(rep_json_path)]):
+        main()
+    capsys.readouterr()
+    rep_data = json.loads(rep_json_path.read_text(encoding="utf-8"))
+    assert rep_data["total_docs"] == 2
+    assert rep_data["audited_docs"] == 1
+    assert rep_data["schema_valid_pct"] == 0.0
+
+    html_path = tmp_path / "report.html"
+    with patch.object(
+        sys,
+        "argv",
+        ["ncm-bench", "report", "--input", str(log_path), "--output-file", str(html_path), "--html"],
+    ):
+        main()
+    capsys.readouterr()
+    html_text = html_path.read_text(encoding="utf-8")
+    assert "<!DOCTYPE html>" in html_text
+    assert "NCM Sovereign Compliance Report" in html_text
+    assert "Total Documents: <strong>2</strong>" in html_text
+    assert "Audited Receipts: <strong>1</strong>" in html_text
+

@@ -43,6 +43,18 @@ class DistillConfig:
     device: str = "cpu"
 
 
+@dataclass
+class DPOConfig:
+    """Configuration for Direct Preference Optimization in discrete concept space."""
+
+    batch_size: int = 8
+    steps: int = 20
+    lr: float = 3e-4
+    beta: float = 0.1
+    device: str = "cpu"
+    seed: int = 42
+
+
 def compute_concept_logprobs(
     net,
     vqvae,
@@ -249,4 +261,72 @@ def distill_teacher_into_ncm(
         "history": history,
         "initial_loss": history[0]["loss"] if history else 0.0,
         "final_loss": history[-1]["loss"] if history else 0.0,
+    }
+
+
+def train_stage2_dpo(
+    prefixes: torch.Tensor,
+    chosen_codes: torch.Tensor,
+    rejected_codes: torch.Tensor,
+    vqvae,
+    policy_net,
+    cfg: DPOConfig,
+    *,
+    ref_net=None,
+) -> dict[str, Any]:
+    """Direct Preference Optimization over winning vs losing discrete NCM code sequences."""
+    dev = torch.device(cfg.device)
+    torch.manual_seed(cfg.seed)
+
+    vqvae = vqvae.to(dev).eval()
+    for p in vqvae.parameters():
+        p.requires_grad = False
+
+    policy_net = policy_net.to(dev)
+    if ref_net is None:
+        ref_net = copy.deepcopy(policy_net)
+    ref_net = ref_net.to(dev).eval()
+    for p in ref_net.parameters():
+        p.requires_grad = False
+
+    optimizer = torch.optim.AdamW(policy_net.parameters(), lr=cfg.lr, weight_decay=0.01)
+    num_prompts = prefixes.shape[0]
+    prefix_len = int(getattr(policy_net, "prefix_len", prefixes.shape[1]))
+    losses: list[float] = []
+    accuracies: list[float] = []
+
+    for _step in range(cfg.steps):
+        idx = torch.randint(0, num_prompts, (min(cfg.batch_size, num_prompts),), device=prefixes.device)
+        x_b = prefixes[idx].to(dev).long()
+        c_win = chosen_codes[idx].to(dev).long()
+        c_lose = rejected_codes[idx].to(dev).long()
+
+        policy_net.train()
+        lp_pi_win, _ = compute_concept_logprobs(policy_net, vqvae, x_b, c_win, prefix_len=prefix_len)
+        lp_pi_lose, _ = compute_concept_logprobs(policy_net, vqvae, x_b, c_lose, prefix_len=prefix_len)
+        with torch.no_grad():
+            lp_ref_win, _ = compute_concept_logprobs(ref_net, vqvae, x_b, c_win, prefix_len=prefix_len)
+            lp_ref_lose, _ = compute_concept_logprobs(ref_net, vqvae, x_b, c_lose, prefix_len=prefix_len)
+
+        pi_diff = lp_pi_win.sum(dim=-1) - lp_pi_lose.sum(dim=-1)
+        ref_diff = lp_ref_win.sum(dim=-1) - lp_ref_lose.sum(dim=-1)
+        logits = cfg.beta * (pi_diff - ref_diff)
+        loss = -F.logsigmoid(logits).mean()
+        acc = float((logits > 0).float().mean().item())
+
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 1.0)
+        optimizer.step()
+
+        losses.append(float(loss.item()))
+        accuracies.append(acc)
+
+    policy_net.eval()
+    return {
+        "model": policy_net,
+        "losses": losses,
+        "initial_loss": losses[0] if losses else 0.0,
+        "final_loss": losses[-1] if losses else 0.0,
+        "preference_accuracy": accuracies[-1] if accuracies else 0.0,
     }

@@ -1,85 +1,81 @@
-# Launch & Press Kit (`ncm-benchmarks` v2.0.0)
+# Launch & Press Kit (`ncm-benchmarks` v2.1.0)
 
-> **Next-Concept Modeling provides proof that the industry's default reliance on 70B cloud autoregressive LLMs for basic document classification and triage is an inefficient legacy pattern.**
->
-> **By replacing sequential token iteration with multiscale discrete concept refinement, enterprises can achieve 100% data sovereignty, sub-$0.00 marginal unit economics, and verified accuracy on existing infrastructure.**
-
-Ready-to-publish announcements anchored strictly to verified receipts in [results/](../results/hx370-cpu/reality_checks.json).
+Verified benchmark hooks, executive talking points, and publication templates anchored strictly to recorded hardware receipts in [`results/`](../results/).
 
 ---
 
-## 1. X / Twitter Thread Draft
+## X / Twitter Thread Template
 
-### Post 1/4 (Hook)
+**Post 1/4**
 
-We benchmarked Stanford & Together AI's *Next-Concept Modeling* (`arXiv:2610.14162`) on non-H100 hardware: a 2018 V100 + a laptop CPU.
+Can an open, sovereign 149M-parameter Next-Concept Model match H100 summarization quality, solve 90.7% of Sudoku-Hard puzzles, and classify documents 3.38x faster via Level 0..2 early-exit on CPU — with zero cloud egress?
 
-- Full 11,334-doc XSum census on V100: **27.93 ROUGE-L** (vs paper 28.0, `9.47 docs/s`)
-- Full 2,000 Sudoku-Hard on V100: **86.30%** (vs paper 86.1%)
-- CPU Best-of-4 + bounded constraint repair (`n=100`): **91.0%** (`+7.0 pp`)
+Meet `ncm-benchmarks` v2.1.0: [GitHub](https://github.com/Hardonian/ncm-benchmarks)
 
-Code, weights verifier & local API (MIT): [github.com/Hardonian/ncm-benchmarks](https://github.com/Hardonian/ncm-benchmarks)
+**Post 2/4**
 
-### Post 2/4 (The Surprises & Null Results)
+Measured receipts on a single 2018 Tesla V100-SXM2 & Ryzen AI 9 HX 370 CPU:
 
-What papers don't tell you:
+- **XSum Full Census (11,334 docs)**: `27.93` ROUGE-L on V100 (`9.47 docs/sec`) vs `28.0` H100 baseline
+- **XSum Batched (`bs=64`)**: `2,728.5 docs/min` (`0.022 s/doc` marginal on V100)
+- **WMT14 En-De (3,003 sentences)**: `21.72` BLEU at `35.16 sent/sec` on V100
+- **Sudoku Multi-Tier (Best-of-4 + Repair)**: `99.8%` Easy, `98.55%` Medium, `90.7%` Hard on V100 (`97.03 / 77.77 / 48.2 boards/s`)
+- **Coarse Early-Exit (`L0..L2`)**: `3.38x` CPU speedup (`356.02 ms` vs `1205.13 ms/doc`)
 
-- Laptop CPU batching (`bs=8` vs `bs=1`) saves **-1.9%** — fp32 GEMMs already saturate 16 cores at `bs=1`.
-- Dynamic INT8 + zero-pickle `.safetensors` (`n=32`, `bs=8`) gives **1.68x CPU speedup** for just **-0.24 pp ROUGE-L** (`1,036 ms` live API summary).
+**Post 3/4**
 
-### Post 3/4 (Missing Upstream Pieces We Built)
+New in `v2.1.0` for sovereign enterprise AI teams:
 
-`HazyResearch/ncm` shipped inference code without training scripts or production serving. `ncm-benchmarks` adds:
+- Multi-format zero-egress ingestion (`.pdf`, `.html`, `.csv`, `.eml`) + `API_KEY` / `IBAN` PII scrubbing
+- Keyed `HMAC-SHA256` cryptographic audit receipts & `ncm-bench report` JSON/HTML compliance exports
+- `POST /triage/feedback` online active learning (`ConceptClassifier.partial_fit`), `CVE` / `IP` extraction with `entity_spans` provenance, and Concept-Space DPO (`train_stage2_dpo`)
 
-- Clean-room Stage-1 VQ-VAE & Stage-2 NCM trainers (`ncm_train/`)
-- Offline PDF map-reduce + PII redaction + SHA-256 audit receipts
-- Hardened async FastAPI + OpenAI `/v1/chat/completions` + Helm/systemd
+**Post 4/4**
 
-### Post 4/4 (Reproduce Yourself)
+Install in one command and inspect every receipt + interactive TCO calculator:
 
-48/48 tests (`70.29%` coverage), 0 `ruff`/`bandit` findings, pinned `SHA256SUMS`, zero network calls at inference:
-
-[Release v2.0.0](https://github.com/Hardonian/ncm-benchmarks/releases/tag/v2.0.0)
-
----
-
-## 2. Reddit (`r/LocalLLaMA` & `r/MachineLearning`)
-
-### Title
-
-`[R] We reproduced Stanford's Next-Concept Modeling (arXiv:2610.14162) on all 11,334 XSum docs (2018 V100) + hit 91% Sudoku-Hard on CPU with Best-of-4 repair`
-
-### Body
-
-We ran an independent reproduction and production engineering build around **Next-Concept Modeling** (discrete hierarchical codes, `K=9`–`12` parallel forward passes instead of 64–128 diffusion steps) on consumer/commodity silicon (`Ryzen AI 9 HX 370` CPU + dedicated `V100-SXM2`):
-
-- **Exact V100 reproduction (`results/v100-sxm2/results.json`)**:
-  - Sudoku-Hard full `2,000` boards: **86.30%** solved (paper: `86.1%`, `26.0 s` wall)
-  - XSum full `11,334`-doc census: **34.92 / 12.71 / 27.93** (paper: `35.0 / 12.8 / 28.0`) at **9.47 docs/s** marginal (`bs=32`)
-- **Inference-time CPU wins (`results/hx370-cpu/reality_checks.json`)**:
-  - **Best-of-4 + bounded constraint repair (`n=100` CPU slice)**: **91.0%** solved (`84%` greedy -> `86%` repair -> `91%`, `98.47%` cell accuracy, Wilson 95% CI `83.77–95.19%`)
-  - **MBR decoding (`N=4`)**: **+1.82 ROUGE-L** (`25.26 -> 27.08`)
-  - **INT8 + zero-pickle `.safetensors` (`n=32`, `bs=8`)**: **1.68x faster** (`55.93 s -> 33.26 s`) at **`-0.24 pp` ROUGE-L**
-- **Engineering extras**: clean-room Stage-1 + Stage-2 trainers (`ncm_train/`), offline PDF/PII scrubbing/audit CLI, async FastAPI + OpenAI `/v1/chat/completions`, `48/48` tests (`ruff` & `bandit` clean).
-
-Honest caveats: single-shot CPU latency is `1.04–2.34 s/doc` (not sub-second), and CPU `bs=8` batching saves `-1.9%`.
-
-Repo (MIT): [github.com/Hardonian/ncm-benchmarks](https://github.com/Hardonian/ncm-benchmarks)
+- `pip install ncm-benchmarks`
+- [PyPI Package](https://pypi.org/project/ncm-benchmarks/)
+- [Interactive Concept Visualizer & TCO Calculator](https://hardonian.github.io/ncm-benchmarks/)
+- [Paper: arXiv:2610.14162](https://arxiv.org/abs/2610.14162)
 
 ---
 
-## 3. LinkedIn Summary Post
+## Reddit (`r/LocalLLaMA` / `r/MachineLearning`) Technical Brief
 
-### Headline
+### [Project] ncm-benchmarks v2.1.0 — Sovereign Next-Concept Engine (V100 Multi-Tier Sudoku 99.8%/98.55%/90.7%, 2,728 docs/min XSum, Early-Exit Triage & Concept-DPO)
 
-Sovereign 654 MB Document Intelligence & Non-H100 Reproduction of Stanford's Next-Concept Modeling
+We released `ncm-benchmarks` v2.1.0 ([PyPI](https://pypi.org/project/ncm-benchmarks/), [GitHub](https://github.com/Hardonian/ncm-benchmarks)), a clean-room systems engineering, alignment, and benchmarking stack built around hierarchical **Next-Concept Modeling (NCM)** ([arXiv:2610.14162](https://arxiv.org/abs/2610.14162)).
 
-### Summary
+Rather than predicting tokens autoregressively, NCM generates coarse-to-fine discrete codes across hierarchy levels in a bounded number of parallel forward passes.
 
-Organizations evaluating local-first AI often ask whether published H100 benchmarks hold on affordable enterprise hardware. Our open-source reproduction (`ncm-benchmarks` v2.0.0) tested Stanford Hazy Research's Next-Concept Modeling end-to-end across a 2018 V100 and a laptop CPU:
+#### Verified Hardware Receipts
 
-- **100% full-corpus parity on V100**: 34.92 / 12.71 / 27.93 ROUGE across all 11,334 XSum articles (within 0.07 pp of H100) and 86.30% on 2,000 Sudoku-Hard puzzles.
-- **CPU Edge Acceleration**: Zero-pickle `.safetensors` + dynamic INT8 delivered a **1.68x speedup** with only `-0.24 pp` ROUGE-L delta (`1,036 ms` live local API response), while Best-of-4 constraint search pushed Sudoku-Hard to **91.0%** (`n=100`).
-- **Enterprise Controls**: Air-gapped execution (`HF_HUB_OFFLINE=1`), SHA-256 weight verification (`SHA256SUMS`), PII redaction/restoration, cryptographic audit receipts, Prometheus telemetry, and Kubernetes Helm charts.
+- **Full XSum 11,334-doc census (V100 FP32)**: `27.93` ROUGE-L at `9.47 docs/sec`, scaling to `2,728.5 docs/min` (`0.022 s/doc` marginal) at `bs=64`
+- **Full WMT14 En-De 3,003-sentence eval (V100 FP32)**: `21.72` BLEU at `35.16 sent/sec` (`85.4 s` total)
+- **Sudoku Multi-Tier (V100 Best-of-4 + deterministic 64-node repair, 6,000 boards)**: Easy `99.8%` (`97.03 boards/sec`), Medium `98.55%` (`77.77 boards/sec`), Hard `90.7%` (`48.2 boards/sec`)
+- **Ryzen AI 9 HX 370 CPU (INT8 `.safetensors`)**: `1.68x` speedup vs FP32 (`33.26s` vs `55.93s` at `-0.24 pp` ROUGE-L) and `3.38x` speedup (`356.02 ms` vs `1205.13 ms/doc`) using Level `0..2` early-exit triage
+- **Clean-room Concept Training (`ncm_train/`)**: Stage-1 VQ (`194.08 -> 3.79`), Concept-GRPO (`+0.0938` reward delta on CPU), Teacher-Student Concept Distillation (`9.398 -> 6.3534`), and discrete Concept-Space DPO (`train_stage2_dpo`)
 
-Explore the full open-source release (MIT): [github.com/Hardonian/ncm-benchmarks](https://github.com/Hardonian/ncm-benchmarks)
+#### What Is New in v2.1.0
+
+1. `.html`, `.csv`, and `.eml` extraction + `API_KEY` and `IBAN` PII redaction in [`ncm_bench/longdoc.py`](../ncm_bench/longdoc.py)
+2. Keyed `HMAC-SHA256` audit signing/verification (`build_audit_receipt` / `verify_audit_receipt`) and `ncm-bench report` (`--html`)
+3. Bounded LRU coarse code caching, `CVE`/`IP` extraction with character `entity_spans`, custom enum/required-field validation, and `POST /triage/feedback` (`ConceptClassifier.partial_fit`)
+4. [100-Item Frontier Roadmap](ROADMAP-100.md) & interactive V100/CPU TCO calculator tab in [docs/index.html](index.html)
+
+---
+
+## LinkedIn Executive Announcement
+
+**Sovereign Document AI Without $0.003–$0.02/Doc API Tax: `ncm-benchmarks` v2.1.0**
+
+Enterprise AI deployments often route sensitive financial, legal, and security documents to expensive cloud APIs simply to classify, redact, and summarize text.
+
+With **`ncm-benchmarks` v2.1.0**, teams can run verifiable **Next-Concept Modeling** completely offline on existing CPUs and commodity GPUs (`$0.0000` marginal API cost):
+
+- **Verified Throughput & Quality**: `2,728.5 docs/min` batched summarization (`bs=64`) and `27.93` ROUGE-L full-census XSum accuracy on a 2018 Tesla V100, plus `3.38x` faster Level `0..2` early-exit routing on laptop CPUs.
+- **Compliance by Construction**: Zero-pickle `.safetensors` weights, native `PDF`/`HTML`/`CSV`/`EML` scrubbing (PII, API keys, IBANs), `HMAC-SHA256` cryptographic audit receipts, and one-command `ncm-bench report` exports.
+- **Closed-Loop Accuracy**: Online feedback tuning via `POST /triage/feedback` and discrete Concept-Space DPO (`train_stage2_dpo`) without cloud lock-in.
+
+Install via `pip install ncm-benchmarks` or explore the interactive demo and hardware receipts at [GitHub](https://github.com/Hardonian/ncm-benchmarks).

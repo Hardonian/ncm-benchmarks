@@ -7,6 +7,7 @@ import pickle
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -741,6 +742,78 @@ def cmd_early_exit_bench(args):
     print(json.dumps(payload, indent=2))
 
 
+def cmd_report(args):
+    import html as html_mod
+    from collections import Counter
+
+    in_path = Path(args.input)
+    if not in_path.exists():
+        print(f"Error: input JSONL not found: {in_path}", file=sys.stderr)
+        sys.exit(1)
+
+    records: list[dict[str, Any]] = []
+    with open(in_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    categories = Counter(str(r.get("category", "uncategorized")) for r in records)
+    priorities = Counter(str(r.get("priority", "unspecified")) for r in records)
+    latencies = sorted(float(r["latency_s"]) for r in records if "latency_s" in r)
+    n_total = len(records)
+    valid_cnt = sum(1 for r in records if r.get("schema_valid") is True)
+    audited_cnt = sum(1 for r in records if "audit_receipt" in r)
+    mean_lat = round(sum(latencies) / len(latencies), 4) if latencies else 0.0
+    p50_lat = round(latencies[int(len(latencies) * 0.50)], 4) if latencies else 0.0
+    p95_lat = round(latencies[min(int(len(latencies) * 0.95), len(latencies) - 1)], 4) if latencies else 0.0
+
+    summary: dict[str, Any] = {
+        "input_file": str(in_path),
+        "total_docs": n_total,
+        "categories": dict(categories),
+        "priorities": dict(priorities),
+        "schema_valid_pct": round((valid_cnt / n_total) * 100.0, 2) if n_total else 0.0,
+        "mean_latency_s": mean_lat,
+        "p50_latency_s": p50_lat,
+        "p95_latency_s": p95_lat,
+        "audited_docs": audited_cnt,
+    }
+
+    if args.html:
+        cat_rows = "".join(
+            f"<tr><td>{html_mod.escape(k)}</td><td>{v}</td></tr>"
+            for k, v in categories.most_common()
+        )
+        prio_rows = "".join(
+            f"<tr><td>{html_mod.escape(k)}</td><td>{v}</td></tr>"
+            for k, v in priorities.most_common()
+        )
+        out_str = (
+            "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>"
+            "<title>NCM Sovereign Compliance Report</title>"
+            "<style>body{font-family:sans-serif;background:#090d16;color:#f8fafc;padding:2rem;}"
+            "table{border-collapse:collapse;width:100%;max-width:640px;margin:1rem 0;}"
+            "th,td{border:1px solid #1e293b;padding:0.5rem 0.75rem;text-align:left;}"
+            "th{background:#131c2e;color:#38bdf8;}</style></head><body>"
+            "<h1>NCM Sovereign Compliance Report</h1>"
+            f"<p>Total Documents: <strong>{n_total}</strong> | Schema Valid: <strong>{summary['schema_valid_pct']}%</strong> | "
+            f"Audited Receipts: <strong>{audited_cnt}</strong> | Latency p50/p95: <strong>{p50_lat}s / {p95_lat}s</strong></p>"
+            "<h2>Categories</h2><table><tr><th>Category</th><th>Count</th></tr>"
+            f"{cat_rows}</table>"
+            "<h2>Priorities</h2><table><tr><th>Priority</th><th>Count</th></tr>"
+            f"{prio_rows}</table></body></html>"
+        )
+    else:
+        out_str = json.dumps(summary, indent=2)
+
+    _emit_output(out_str, args)
+
+
 def cmd_verify(args):
     from scripts.fetch_artifacts import load_checksums, sha256_file
 
@@ -921,6 +994,13 @@ def main():
     p_eeb.add_argument("--max-level", type=int, default=2)
     _add_common_flags(p_eeb, with_io=False)
     p_eeb.set_defaults(func=cmd_early_exit_bench)
+
+    # report
+    p_rep = sub.add_parser("report", help="Summarize batch triage JSONL into JSON or HTML compliance report")
+    p_rep.add_argument("--input", "-i", required=True, help="Path to triage_results.jsonl")
+    p_rep.add_argument("--output-file", "-o", default=None, help="Optional output file path")
+    p_rep.add_argument("--html", action="store_true", help="Emit standalone HTML report instead of JSON")
+    p_rep.set_defaults(func=cmd_report)
 
     # verify
     p_ver = sub.add_parser("verify", help="Verify model and data SHA256 checksums")

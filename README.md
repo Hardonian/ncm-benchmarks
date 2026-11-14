@@ -4,7 +4,7 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/ncm-benchmarks.svg)](https://pypi.org/project/ncm-benchmarks/)
 [![CI Status](https://github.com/Hardonian/ncm-benchmarks/actions/workflows/ci.yml/badge.svg)](https://github.com/Hardonian/ncm-benchmarks/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v2.0.0-green.svg)](https://github.com/Hardonian/ncm-benchmarks/releases)
+[![Release](https://img.shields.io/badge/release-v2.1.0-green.svg)](https://github.com/Hardonian/ncm-benchmarks/releases)
 [![Zero Pickle](https://img.shields.io/badge/security-zero--pickle%20safetensors-purple.svg)](https://github.com/Hardonian/ncm-benchmarks)
 
 > **"Next-Concept Modeling proves that the industry's default reliance on 70B cloud autoregressive LLMs for basic document classification and triage is an inefficient legacy pattern.**
@@ -70,6 +70,9 @@ ncm-bench triage --text "Urgent breach noticed by alice@corp.com ($480,000) on 2
 
 # Benchmark early-exit Level 0..2 vs full Level 0..8 decoding
 ncm-bench early-exit-bench --n 8 --max-level 2 --quantize int8
+
+# Generate sovereign GDPR/SOC2/HIPAA Markdown or HTML compliance report from audit JSONL
+ncm-bench report --input audit_log.jsonl --output-file audit_report.html --html
 ```
 
 ### 3. Launch Local Sovereign API
@@ -88,10 +91,11 @@ ncm-bench serve --port 8031 --quantize int8
 ├──────────────────┬────────────────────────────┬────────────────────────┤
 │   DATA INGEST    │     CONCEPT ENGINE         │    ENTERPRISE OPS      │
 │                  │                            │                        │
-│ • PDF / Text / MD│ • Multi-scale Discrete VQ  │ • OpenAI Compatible API│
-│ • Regex PII Redact│ • 8–12 Parallel Passes    │ • Prometheus /metrics  │
-│ • Sentence Chunk │ • INT8 Dynamic Quantized   │ • SHA-256 Audit Trails │
-│ • Restored Clues │ • Best-of-K MBR Consensus  │ • Helm & Docker Ready  │
+│ • PDF/HTML/CSV/  │ • Multi-scale Discrete VQ  │ • OpenAI Compatible API│
+│   EML / Text / MD│ • 8–12 Parallel Passes    │ • Prometheus /metrics  │
+│ • PII+Key+IBAN   │ • INT8 Dynamic Quantized   │ • HMAC-SHA256 Audits   │
+│ • Sentence Chunk │ • Best-of-K MBR Consensus  │ • /triage/feedback &   │
+│ • Span Provenance│ • LRU Coarse Code Cache    │   Compliance Reporter  │
 └──────────────────┴────────────────────────────┴────────────────────────┘
 ```
 
@@ -108,13 +112,13 @@ NCM's discrete code generation excels at structured reasoning. By pairing NCM pa
 While upstream releases provided inference-only evaluation, `ncm-benchmarks` delivers clean-room training, alignment, and distillation implementations:
 
 - **Stage-1 & Stage-2 Pretraining**: Multiscale Residual VQ-VAE + Next-Concept Transformer (`194.08 → 3.79` Stage-1 loss in 40 steps via `ncm-bench train-smoke`).
-- **Discrete Concept-Space GRPO / RLVR** ([`ncm_train/rl_distill.py`](ncm_train/rl_distill.py)): Group Relative Policy Optimization over discrete hierarchical codebooks (`+0.0938` reward delta `0.5820 → 0.6758` in 24 CPU steps via `ncm-bench rl-smoke`).
+- **Discrete Concept-Space GRPO / RLVR & DPO** ([`ncm_train/rl_distill.py`](ncm_train/rl_distill.py)): Group Relative Policy Optimization (`+0.0938` reward delta `0.5820 → 0.6758` in 24 CPU steps via `ncm-bench rl-smoke`) plus clean-room Concept-Space Direct Preference Optimization (`DPOConfig`, `train_stage2_dpo`).
 - **Teacher-Student Concept Distillation**: KL-guided distillation in hierarchical concept space (`9.398 → 6.3534` loss in 20 CPU steps via `ncm-bench distill-smoke`).
 
 ### 🔬 Interactive Progressive Visualizer & Early-Exit Triage
 
-- **Zero-Backend Explorer** ([`docs/index.html`](docs/index.html)): Inspect live Level `0..8` concept refinement over real XSum validations or connect directly to `ncm-bench serve` (`POST /progressive_summarize` and `POST /triage`).
-- **Sovereign Structured Triage** ([`ncm_bench/triage.py`](ncm_bench/triage.py)): Combines coarse `L0..L2` early-exit signatures (`ConceptIndex`, `ConceptClassifier`) with schema-validated Best-of-$K$ extraction, PII scrubbing/restoration, and `NCMClient.triage()`.
+- **Zero-Backend Explorer** ([`docs/index.html`](docs/index.html)): Inspect live Level `0..8` concept refinement, V100/CPU hardware receipts, interactive TCO comparisons, or connect directly to `ncm-bench serve` (`POST /progressive_summarize`, `POST /triage`, `POST /triage/feedback`).
+- **Sovereign Structured Triage** ([`ncm_bench/triage.py`](ncm_bench/triage.py)): Combines bounded LRU-cached coarse `L0..L2` early-exit signatures (`ConceptIndex`, `ConceptClassifier.partial_fit` online learning) with CVE/IP/entity `entity_spans` provenance, custom enum/required-field schema repair, PII scrubbing/restoration, and `NCMClient.triage_feedback()`.
 
 ---
 
@@ -159,7 +163,10 @@ python scripts/batch_triage.py --input raw_docs.jsonl --output triaged.jsonl --e
 | **Ryzen AI 9 HX 370 (CPU)** | Sudoku-Hard (Greedy) | `18.93 s` (100 boards) | 84.0% solved | [`results/hx370-cpu/`](results/hx370-cpu/) |
 | **Ryzen AI 9 HX 370 (CPU)** | Sudoku-Hard (Best-of-4 + Repair) | `26.46 s` (100 boards) | **91.0% solved** | [`results/hx370-cpu/`](results/hx370-cpu/) |
 | **Tesla V100-SXM2 (16GB)** | XSum Full Census (11,334 docs) | **`9.47 docs/sec`** (`0.097 s/doc`) | `27.93` ROUGE-L | [`results/v100-sxm2/`](results/v100-sxm2/) |
+| **Tesla V100-SXM2 (16GB)** | XSum Batched (`bs=64`, FP32) | **`2,728.5 docs/min`** (`0.022 s/doc` marginal) | FP32 Batch Sweep | [`results/v100-sxm2/xsum_batch_sweep.json`](results/v100-sxm2/xsum_batch_sweep.json) |
+| **Tesla V100-SXM2 (16GB)** | WMT14 En-De Full (`3,003` sent, `bs=32`) | **`35.16 sent/sec`** (`85.4 s` wall) | **`21.72` BLEU** | [`results/v100-sxm2/wmt14_full_bleu.json`](results/v100-sxm2/wmt14_full_bleu.json) |
 | **Tesla V100-SXM2 (16GB)** | Sudoku-Hard Full Test (2,000 boards)| **`76.9 boards/sec`** (`26.0 s` wall) | **86.30% solved** | [`results/v100-sxm2/`](results/v100-sxm2/) |
+| **Tesla V100-SXM2 (16GB)** | Sudoku Multi-Tier (6,000 boards, Best-of-4 + Repair) | **`97.03 / 77.77 / 48.2 boards/s`** | **99.8% / 98.55% / 90.7%** | [`results/v100-sxm2/sudoku_multi_tier.json`](results/v100-sxm2/sudoku_multi_tier.json) |
 
 > **Honest Engineering Note**: Sub-second single-shot summarization does not hold on laptop CPUs in FP32 (`2.34 s/doc`); dynamic INT8 brings it down to `1.04 s`. CPU batching (`bs=8` vs `bs=1`) yields `-1.9%` because FP32 GEMMs already saturate 16 cores on a single document. On dedicated V100 GPUs, throughput scales linearly to 9.47 docs/sec.
 
@@ -186,6 +193,7 @@ python scripts/batch_triage.py --input raw_docs.jsonl --output triaged.jsonl --e
 ## 📑 Strategic Whitepaper & Research References
 
 - **[Enterprise Whitepaper](docs/ENTERPRISE-WHITEPAPER.md)**: Deep dive into sovereign unit economics, data compliance frameworks, and cold-storage triage architecture.
+- **[100-Item Frontier Roadmap](docs/ROADMAP-100.md)**: Full 10-pillar engineering roadmap tracking delivered `v2.0.0` / `v2.1.0` capabilities and upcoming frontier milestones.
 - **[Launch & Press Kit](docs/PRESS-KIT.md)**: Verified publication hooks, technical executive briefs, and media statements.
 - **[Hermes EPYC Runbook](docs/HERMES-EPYC-PROMPT.md)**: Automation runbook for high-throughput GPU/CPU stress testing and multi-dataset evaluation.
 

@@ -11,6 +11,7 @@ from ncm_bench.longdoc import (
     redact_pii,
     restore_pii,
     summarize_long_document,
+    verify_audit_receipt,
 )
 from ncm_bench.mbr import compute_pairwise_cosine, select_mbr_centroid
 from ncm_bench.metrics import score_bleu
@@ -112,3 +113,55 @@ def test_mbr_cosine_and_bleu_and_progressive_html() -> None:
     assert "tok-added" in html_out
     assert "diff-row" in html_out
     assert "Hello world today friend" in html_out
+
+
+def test_pii_api_key_iban_multiformat_and_hmac_receipt(tmp_path: Path) -> None:
+    src = (
+        "Key sk-ant-api03-1234567890abcdef123456 and ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456 "
+        "plus IBAN DE89370400440532013000 transferred."
+    )
+    scrubbed, mapping = redact_pii(src)
+    assert "sk-ant-api03-" not in scrubbed
+    assert "ghp_ABCDEFG" not in scrubbed
+    assert "DE89370400440532013000" not in scrubbed
+    assert len(mapping) >= 3
+    assert restore_pii(scrubbed, mapping) == src
+
+    html_p = tmp_path / "memo.html"
+    html_p.write_text(
+        "<html><head><style>body{color:red}</style><script>alert(1)</script></head>"
+        "<body><h1>Brief</h1><p>Alpha &amp; Beta report.</p></body></html>",
+        encoding="utf-8",
+    )
+    html_txt = extract_text_from_file(html_p)
+    assert "Brief" in html_txt and "Alpha & Beta report." in html_txt
+    assert "alert(1)" not in html_txt
+
+    csv_p = tmp_path / "ledger.csv"
+    csv_p.write_text("dept,amount\nFinance,480000\nSecurity,12000\n", encoding="utf-8")
+    csv_txt = extract_text_from_file(csv_p)
+    assert "dept, amount" in csv_txt and "Finance, 480000" in csv_txt
+
+    eml_p = tmp_path / "alert.eml"
+    eml_p.write_text(
+        "From: ops@example.com\nTo: sec@example.com\nSubject: Incident Notice\n"
+        "MIME-Version: 1.0\nContent-Type: multipart/alternative; boundary=\"b1\"\n\n"
+        "--b1\nContent-Type: text/plain; charset=utf-8\n\nPlain body alert.\n"
+        "--b1\nContent-Type: text/html; charset=utf-8\n\n<p>HTML body</p>\n--b1--\n",
+        encoding="utf-8",
+    )
+    eml_txt = extract_text_from_file(eml_p)
+    assert "Subject: Incident Notice" in eml_txt
+    assert "Plain body alert." in eml_txt
+
+    receipt = build_audit_receipt(src, "Sanitized summary", mapping, hmac_secret="secret-key-21")
+    assert "hmac_sha256" in receipt
+    assert verify_audit_receipt(receipt, "secret-key-21") is True
+    assert verify_audit_receipt(receipt, "wrong-key") is False
+
+    tampered = dict(receipt)
+    tampered["output_sha256"] = "0" * 64
+    assert verify_audit_receipt(tampered, "secret-key-21") is False
+
+    unsigned = build_audit_receipt(src, "Sanitized summary", mapping)
+    assert verify_audit_receipt(unsigned, "secret-key-21") is False

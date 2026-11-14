@@ -157,6 +157,12 @@ class BatchTriageRequest(BaseModel):
     audit_receipt: bool = False
 
 
+class TriageFeedbackRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=100_000)
+    label: str = Field(..., min_length=1, max_length=64)
+    max_level: int = Field(default=2, ge=0, le=16)
+
+
 CKPT: dict[str, Any] | None = None
 
 
@@ -241,6 +247,7 @@ def create_app(
         "latency_seconds_count": 0,
         "active_inferences": 0,
         "hist_buckets": {b: 0 for b in LATENCY_BUCKETS},
+        "triage_classifier": None,
         "shutting_down": False,
     }
     model_lock = threading.Lock()
@@ -257,7 +264,7 @@ def create_app(
     app = fastapi.FastAPI(
         title="Next-Concept Modeling Sovereign Service",
         description="Local-first coarse-to-fine concept generation, MBR, and Sudoku microservice",
-        version="2.0.0",
+        version="2.1.0",
         lifespan=lifespan,
     )
 
@@ -544,6 +551,7 @@ def create_app(
                 b,
                 req.text,
                 labels=req.labels,
+                classifier=state.get("triage_classifier"),
                 max_level=req.max_level,
                 best_of_k=req.best_of_k,
                 temperature=req.temperature,
@@ -575,6 +583,7 @@ def create_app(
                 b,
                 req.texts,
                 labels=req.labels,
+                classifier=state.get("triage_classifier"),
                 max_level=req.max_level,
                 best_of_k=req.best_of_k,
                 temperature=req.temperature,
@@ -598,6 +607,27 @@ def create_app(
                     mode="batch_triage",
                 )
         return res
+
+    @app.post("/triage/feedback", dependencies=[Depends(require_auth)])
+    async def triage_feedback_endpoint(req: TriageFeedbackRequest):
+        from ncm_bench.triage import ConceptClassifier, generate_coarse_codes
+
+        def _apply_feedback(b: dict[str, Any]) -> list[str]:
+            sig = generate_coarse_codes(b, [req.text], max_level=req.max_level)[0]
+            clf = state.get("triage_classifier")
+            if clf is None:
+                clf = ConceptClassifier()
+                state["triage_classifier"] = clf
+            clf.partial_fit(sig, req.label)
+            return sorted(clf.centroids.keys())
+
+        known_labels, latency_ms = await _run_serialized(_apply_feedback)
+        return {
+            "status": "updated",
+            "label": req.label,
+            "known_labels": known_labels,
+            "latency_ms": latency_ms,
+        }
 
     @app.post("/summarize", dependencies=[Depends(require_auth)])
     async def summarize_endpoint(req: SummarizeRequest):

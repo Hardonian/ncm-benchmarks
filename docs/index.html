@@ -214,6 +214,10 @@
     .flex-input { flex: 1; min-width: 220px; }
     .labels-input { flex: 1; min-width: 260px; }
     .token-input { width: 210px; }
+    .bench-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 0.5rem; }
+    .bench-table th, .bench-table td { border-bottom: 1px solid var(--border); padding: 0.65rem 0.75rem; text-align: left; }
+    .bench-table th { color: var(--accent); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .bench-highlight { color: var(--success); font-weight: 700; }
   </style>
 </head>
 <body>
@@ -231,6 +235,7 @@
 
     <div class="tabs">
       <button class="tab-btn active" data-tab="offline">Precomputed XSum (9 Levels)</button>
+      <button class="tab-btn" data-tab="benchmarks">V100 &amp; CPU Receipts + TCO</button>
       <button class="tab-btn" data-tab="live-prog">Live Progressive Decode</button>
       <button class="tab-btn" data-tab="live-triage">Live Sovereign Triage</button>
     </div>
@@ -315,6 +320,75 @@
         <pre class="json-box" id="triage-json"></pre>
       </div>
     </section>
+
+    <!-- TAB 4: VERIFIED BENCHMARKS & TCO CALCULATOR -->
+    <section id="tab-benchmarks" class="hidden">
+      <div class="card">
+        <div class="card-title">Verified Hardware Benchmark Receipts (Zero Unverified Numbers)</div>
+        <table class="bench-table">
+          <thead>
+            <tr>
+              <th>Hardware</th>
+              <th>Workload</th>
+              <th>Throughput / Latency</th>
+              <th>Quality Metric</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Tesla V100-SXM2 (16GB)</td>
+              <td>XSum Batch Sweep (bs=64, FP32)</td>
+              <td class="bench-highlight">2,728.5 docs/min (0.022 s/doc marginal)</td>
+              <td>27.93 ROUGE-L (full 11,334 census)</td>
+            </tr>
+            <tr>
+              <td>Tesla V100-SXM2 (16GB)</td>
+              <td>WMT14 En-De Test (3,003 sents, bs=32)</td>
+              <td class="bench-highlight">35.16 sent/sec (85.4 s wall)</td>
+              <td class="bench-highlight">21.72 BLEU (BP 0.928)</td>
+            </tr>
+            <tr>
+              <td>Tesla V100-SXM2 (16GB)</td>
+              <td>Sudoku Easy / Medium / Hard (Bo4 + Repair, 6,000 boards)</td>
+              <td>97.03 / 77.77 / 48.20 boards/sec</td>
+              <td class="bench-highlight">99.8% / 98.55% / 90.7% solved</td>
+            </tr>
+            <tr>
+              <td>Ryzen AI 9 HX 370 (CPU)</td>
+              <td>XSum Early-Exit (L0..L2, INT8 .safetensors)</td>
+              <td class="bench-highlight">356.02 ms/doc (3.38x speedup)</td>
+              <td>3/9 concept passes</td>
+            </tr>
+            <tr>
+              <td>Ryzen AI 9 HX 370 (CPU)</td>
+              <td>Sudoku-Hard (Best-of-4 + Repair, 100 boards)</td>
+              <td>26.46 s wall</td>
+              <td class="bench-highlight">91.0% solved (+7.0 pp over greedy)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Enterprise Cloud API vs Sovereign NCM Annual TCO Calculator</div>
+        <label for="tco-slider" class="field-label">Daily Document Triage Volume: <span id="tco-vol-label">100,000</span> docs / day</label>
+        <input type="range" id="tco-slider" min="10000" max="2000000" step="10000" value="100000" aria-label="Daily document triage volume" title="Daily document triage volume" />
+        <div class="stats-row mb-none">
+          <div class="stat-box">
+            <div class="stat-label">Annual Cloud LLM API ($0.005/doc)</div>
+            <div class="stat-val" id="tco-cloud">$182,500</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Sovereign NCM Per-Token Fee</div>
+            <div class="stat-val">$0</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Projected Annual Token Savings</div>
+            <div class="stat-val" id="tco-savings">$182,500</div>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script>
@@ -328,6 +402,7 @@
       const serverBar = document.getElementById('server-bar');
       const sections = {
         'offline': document.getElementById('tab-offline'),
+        'benchmarks': document.getElementById('tab-benchmarks'),
         'live-prog': document.getElementById('tab-live-prog'),
         'live-triage': document.getElementById('tab-live-triage')
       };
@@ -338,7 +413,7 @@
           btn.classList.add('active');
           const key = btn.dataset.tab;
           Object.keys(sections).forEach(k => sections[k].classList.toggle('hidden', k !== key));
-          serverBar.classList.toggle('hidden', key === 'offline');
+          serverBar.classList.toggle('hidden', key === 'offline' || key === 'benchmarks');
         });
       });
 
@@ -565,6 +640,21 @@
           status.textContent = 'Request failed: ' + err.message;
         }
       });
+
+      const tcoSlider = document.getElementById('tco-slider');
+      function updateTco() {
+        if (!tcoSlider) return;
+        const dailyDocs = Number(tcoSlider.value) || 100000;
+        const annualCloud = Math.round(dailyDocs * 365 * 0.005);
+        const fmt = '$' + annualCloud.toLocaleString('en-US');
+        document.getElementById('tco-vol-label').textContent = dailyDocs.toLocaleString('en-US');
+        document.getElementById('tco-cloud').textContent = fmt;
+        document.getElementById('tco-savings').textContent = fmt;
+      }
+      if (tcoSlider) {
+        tcoSlider.addEventListener('input', updateTco);
+        updateTco();
+      }
 
       loadDemo();
     })();

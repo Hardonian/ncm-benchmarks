@@ -230,3 +230,156 @@ def test_decode_logits_with_frequency_and_adjacency_penalties_and_prefix_batch(t
     assert batch_pretok.tolist() == [[4, 5, 0, 0]]
 
 
+def test_export_safetensors_and_load_bundle_mocked(tmp_path: Path, monkeypatch):
+    import sys
+    import types
+
+    from ncm_bench.inference import export_safetensors, load_bundle
+
+    (tmp_path / "ncm").mkdir(parents=True)
+    art_dir = tmp_path / "artifacts" / "xsum"
+    art_dir.mkdir(parents=True)
+
+    cfg_yaml = (
+        "checkpoints:\n"
+        "  tokenizer: tok.pt\n"
+        "  generator: gen.pt\n"
+        "tokenizer:\n"
+        "  pre_tokenizer:\n"
+        "    name: hf\n"
+        "    model_id: gpt2\n"
+        "  vqvae:\n"
+        "    dim: 4\n"
+        "model:\n"
+        "  prefix_len: 4\n"
+        "generation:\n"
+        "  frequency_allowance: true\n"
+        "  adjacency_penalty: '1.0,2.0'\n"
+        "  temperature: 0.7\n"
+        "  top_k: 4\n"
+        "  cut_at_eos: true\n"
+    )
+    cfg_path = art_dir / "config.yaml"
+    cfg_path.write_text(cfg_yaml, encoding="utf-8")
+
+    tok_pt = art_dir / "tok.pt"
+    gen_pt = art_dir / "gen.pt"
+    torch.save({"model": {"lin.weight": torch.randn(2, 2), "lin.bias": torch.zeros(2)}}, tok_pt)
+    torch.save(
+        {
+            "model": {"lin.weight": torch.randn(2, 2), "lin.bias": torch.zeros(2)},
+            "inference": {"token_unigram": torch.ones(4)},
+        },
+        gen_pt,
+    )
+
+    sums_lines = []
+    for p, rel in [
+        (cfg_path, "artifacts/xsum/config.yaml"),
+        (tok_pt, "artifacts/xsum/tok.pt"),
+        (gen_pt, "artifacts/xsum/gen.pt"),
+    ]:
+        h = hashlib.sha256(p.read_bytes()).hexdigest()
+        sums_lines.append(f"{h}  {rel}")
+    (tmp_path / "SHA256SUMS").write_text("\n".join(sums_lines) + "\n", encoding="utf-8")
+
+    exported = export_safetensors("xsum", root_dir=tmp_path, verify_checksums=True)
+    assert exported["tokenizer"].exists()
+    assert exported["generator"].exists()
+    assert exported["meta"].exists()
+
+    class _FakeVQVAE(torch.nn.Module):
+        def __init__(self, **_kw):
+            super().__init__()
+            self.lin = torch.nn.Linear(2, 2)
+
+    class _FakeGen(torch.nn.Module):
+        def __init__(self, vqvae_local=None, config=None):
+            super().__init__()
+            del vqvae_local, config
+            self.lin = torch.nn.Linear(2, 2)
+
+    class _FakePreTok:
+        eos_token_id = 2
+        pad_token_id = 0
+        bos_token_id = 1
+
+        @classmethod
+        def from_config(cls, _cfg):
+            return cls()
+
+    class _FakeVQTok:
+        def __init__(self, pre_tok, vqvae):
+            self.pre_tokenizer = pre_tok
+            self.vqvae = vqvae
+
+        @classmethod
+        def from_config(cls, _cfg):
+            return cls(_FakePreTok(), _FakeVQVAE())
+
+    mod_hydra = types.ModuleType("hydra")
+    mod_hydra_utils = types.ModuleType("hydra.utils")
+    mod_hydra_utils.get_class = lambda _path: _FakePreTok
+    mod_hydra.utils = mod_hydra_utils
+
+    mod_models = types.ModuleType("models")
+    mod_models_ncm = types.ModuleType("models.next_concept")
+    mod_models_ncm.NextConceptTransformer = _FakeGen
+    mod_models_vq = types.ModuleType("models.vqvae")
+    mod_models_vq.VQVAE = _FakeVQVAE
+
+    mod_tok = types.ModuleType("tokenization")
+    mod_tok_vq = types.ModuleType("tokenization.vqvae_tokenizer")
+    mod_tok_vq.VQVAETokenizer = _FakeVQTok
+
+    mod_utils = types.ModuleType("utils")
+    mod_utils_reg = types.ModuleType("utils.registry")
+    mod_utils_reg.tokenizers = {"hf": "fake.PreTok"}
+
+    mod_tf = types.ModuleType("transformers")
+
+    class _FakeAutoTok:
+        @staticmethod
+        def from_pretrained(_model_id, revision=None):
+            return {"revision": revision}
+
+    mod_tf.AutoTokenizer = _FakeAutoTok
+
+    for name, mod in {
+        "hydra": mod_hydra,
+        "hydra.utils": mod_hydra_utils,
+        "models": mod_models,
+        "models.next_concept": mod_models_ncm,
+        "models.vqvae": mod_models_vq,
+        "tokenization": mod_tok,
+        "tokenization.vqvae_tokenizer": mod_tok_vq,
+        "utils": mod_utils,
+        "utils.registry": mod_utils_reg,
+        "transformers": mod_tf,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+
+    st_bundle = load_bundle(
+        "xsum",
+        device="cpu",
+        quantize="int8",
+        verify_checksums=True,
+        prefer_safetensors=True,
+        root_dir=tmp_path,
+    )
+    assert st_bundle["ckpt_format"] == "safetensors"
+    assert st_bundle["quantize"] == "int8"
+    assert st_bundle["adj"] == [1.0, 2.0]
+
+    pt_bundle = load_bundle(
+        "xsum",
+        device="cpu",
+        quantize="none",
+        verify_checksums=True,
+        prefer_safetensors=False,
+        root_dir=tmp_path,
+    )
+    assert pt_bundle["ckpt_format"] == "pt"
+    assert pt_bundle["quantize"] == "none"
+
+

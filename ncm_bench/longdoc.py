@@ -1,7 +1,13 @@
 """Enterprise document utilities: offline file/PDF ingestion, long-doc map-reduce, PII redaction, and audit receipts."""
 from __future__ import annotations
 
+import csv
+import email
 import hashlib
+import hmac
+import html
+import io
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +17,8 @@ from ncm_bench.inference import summarize_texts
 from ncm_bench.mbr import generate_mbr_summary
 
 _PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("API_KEY", re.compile(r"\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,})\b")),
+    ("IBAN", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")),
     ("EMAIL", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
     ("SSN", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
     ("CARD", re.compile(r"\b(?:\d{4}[-\s]?){3}\d{4}\b")),
@@ -20,17 +28,59 @@ _PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 
 def extract_text_from_file(path: Path | str) -> str:
-    """Extracts UTF-8 plain text from .txt, .md, .json/.jsonl, or .pdf files locally."""
+    """Extracts UTF-8 plain text from .txt, .md, .json/.jsonl, .html, .csv, .eml, or .pdf files locally."""
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Input file not found: {p}")
-    if p.suffix.lower() == ".pdf":
+    suffix = p.suffix.lower()
+    if suffix == ".pdf":
         from pypdf import PdfReader
 
         reader = PdfReader(str(p))
         pages = [page.extract_text() or "" for page in reader.pages]
         return "\n\n".join(pages).strip()
-    return p.read_text(encoding="utf-8", errors="replace").strip()
+
+    raw = p.read_text(encoding="utf-8", errors="replace")
+    if suffix in {".html", ".htm"}:
+        no_scripts = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", raw, flags=re.IGNORECASE | re.DOTALL)
+        stripped = re.sub(r"<[^>]+>", " ", no_scripts)
+        return " ".join(html.unescape(stripped).split()).strip()
+    if suffix == ".csv":
+        rows = [
+            ", ".join(cell.strip() for cell in row if cell.strip())
+            for row in csv.reader(io.StringIO(raw))
+        ]
+        return "\n".join(r for r in rows if r).strip()
+    if suffix == ".eml":
+        msg = email.message_from_string(raw)
+        parts: list[str] = []
+        subject = str(msg.get("Subject", "")).strip()
+        if subject:
+            parts.append(f"Subject: {subject}")
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() == "text/plain" and "attachment" not in str(
+                    part.get("Content-Disposition", "")
+                ).lower():
+                    payload = part.get_payload(decode=True)
+                    text_part = (
+                        payload.decode(part.get_content_charset() or "utf-8", errors="replace")
+                        if isinstance(payload, (bytes, bytearray))
+                        else str(part.get_payload() or "")
+                    )
+                    if text_part.strip():
+                        parts.append(text_part.strip())
+        else:
+            payload = msg.get_payload(decode=True)
+            body = (
+                payload.decode(msg.get_content_charset() or "utf-8", errors="replace")
+                if isinstance(payload, (bytes, bytearray))
+                else str(msg.get_payload() or "")
+            )
+            if body.strip():
+                parts.append(body.strip())
+        return "\n\n".join(parts).strip()
+    return raw.strip()
 
 
 def redact_pii(text: str) -> tuple[str, dict[str, str]]:
@@ -141,9 +191,10 @@ def build_audit_receipt(
     *,
     pii_redactions: int = 0,
     mode: str = "standard",
+    hmac_secret: str | None = None,
 ) -> dict[str, Any]:
     """Creates a cryptographic SHA-256 compliance audit receipt without storing raw PII."""
-    return {
+    receipt: dict[str, Any] = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "task": str(bundle.get("task", "xsum")),
         "device": str(bundle.get("device", "cpu")),
@@ -157,4 +208,24 @@ def build_audit_receipt(
         "input_sha256": hashlib.sha256(input_text.encode("utf-8")).hexdigest(),
         "output_sha256": hashlib.sha256(output_text.encode("utf-8")).hexdigest(),
     }
+    secret = hmac_secret if hmac_secret is not None else os.environ.get("NCM_AUDIT_HMAC_KEY")
+    if secret:
+        canonical = (
+            f"{receipt['timestamp_utc']}|{receipt['task']}|{receipt['mode']}|"
+            f"{receipt['input_sha256']}|{receipt['output_sha256']}|{receipt['pii_redactions']}"
+        )
+        receipt["hmac_sha256"] = hmac.new(
+            secret.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
+    return receipt
+
+
+def verify_audit_receipt(receipt: dict[str, Any], hmac_secret: str) -> bool:
+    """Verifies the HMAC-SHA256 signature on an audit receipt."""
+    canonical = (
+        f"{receipt['timestamp_utc']}|{receipt['task']}|{receipt['mode']}|"
+        f"{receipt['input_sha256']}|{receipt['output_sha256']}|{receipt['pii_redactions']}"
+    )
+    expected = hmac.new(hmac_secret.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(str(receipt.get("hmac_sha256", "")), expected)
 

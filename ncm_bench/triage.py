@@ -5,7 +5,7 @@ import hashlib
 import json
 import math
 import re
-from collections import Counter
+from collections import Counter, OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +33,17 @@ _ENTITY_PATTERNS: dict[str, re.Pattern[str]] = {
     "dates": re.compile(r"\b(?:\d{4}-\d{2}-\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})\b"),
     "emails": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
     "urls": re.compile(r"https?://[^\s<>\"')]+"),
+    "cves": re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE),
+    "ips": re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"),
 }
+
+_COARSE_CACHE_MAX = 512
+_COARSE_CACHE: OrderedDict[tuple[str, int], dict[str, Any]] = OrderedDict()
+
+
+def clear_coarse_cache() -> None:
+    """Clears the in-memory coarse signature LRU cache."""
+    _COARSE_CACHE.clear()
 
 
 def _extract_entities(text: str) -> dict[str, list[str]]:
@@ -45,6 +55,23 @@ def _extract_entities(text: str) -> dict[str, list[str]]:
             if val and val not in seen:
                 seen.append(val)
         extracted[key] = seen[:10]
+    return extracted
+
+
+def extract_entities_with_spans(text: str) -> dict[str, list[dict[str, Any]]]:
+    """Extracts unique entities along with character offsets for source provenance."""
+    extracted: dict[str, list[dict[str, Any]]] = {}
+    for key, pattern in _ENTITY_PATTERNS.items():
+        items: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for match in pattern.finditer(text):
+            val = match.group(0).strip()
+            if val and val not in seen:
+                seen.add(val)
+                items.append({"value": val, "start": match.start(), "end": match.end()})
+                if len(items) >= 10:
+                    break
+        extracted[key] = items
     return extracted
 
 
@@ -80,6 +107,7 @@ def generate_coarse_codes(
     top_k: int = 50,
     top_p: float = 0.9,
     decode_preview: bool = False,
+    use_cache: bool = True,
 ) -> list[dict[str, Any]]:
     """Runs early-exit NCM generation up to level `max_level`, skipping fine refinement passes."""
     if not texts:
@@ -89,6 +117,22 @@ def generate_coarse_codes(
     tk = bundle["tk"]
     levels = list(getattr(net, "levels", (2, 4, 8)))
     clamped_max = max(0, min(int(max_level), len(levels) - 1))
+
+    cache_eligible = (
+        use_cache
+        and temperature == 0.0
+        and not decode_preview
+        and all(isinstance(t, str) for t in texts)
+    )
+    net_tag = str(id(net))
+    if cache_eligible:
+        cache_keys = [(f"{net_tag}:{t}", clamped_max) for t in texts]
+        if all(k in _COARSE_CACHE for k in cache_keys):
+            cached_out: list[dict[str, Any]] = []
+            for k in cache_keys:
+                _COARSE_CACHE.move_to_end(k)
+                cached_out.append(dict(_COARSE_CACHE[k]))
+            return cached_out
 
     x = prepare_prefix_batch(bundle, texts)
     eos = bundle.get("EOS")
@@ -231,6 +275,12 @@ def generate_coarse_codes(
         }
         if preview_texts is not None:
             entry["preview_text"] = preview_texts[b_idx]
+        if cache_eligible:
+            ck = (f"{net_tag}:{texts[b_idx]}", clamped_max)
+            _COARSE_CACHE[ck] = dict(entry)
+            _COARSE_CACHE.move_to_end(ck)
+            while len(_COARSE_CACHE) > _COARSE_CACHE_MAX:
+                _COARSE_CACHE.popitem(last=False)
         out.append(entry)
     return out
 
@@ -352,6 +402,19 @@ class ConceptClassifier:
             self.centroids[lbl] = {k: v / norm for k, v in summed.items()}
         return self
 
+    def partial_fit(self, signature: dict[str, Any], label: str, *, lr: float = 0.25) -> "ConceptClassifier":
+        """Online active-learning update blending a newly labeled coarse signature into prototype centroids."""
+        hist = {int(k): float(v) for k, v in signature["histogram"].items()}
+        if label not in self.centroids:
+            self.centroids[label] = dict(hist)
+            return self
+        cur = self.centroids[label]
+        keys = set(cur.keys()) | set(hist.keys())
+        merged = {k: (1.0 - lr) * cur.get(k, 0.0) + lr * hist.get(k, 0.0) for k in keys}
+        norm = math.sqrt(sum(v * v for v in merged.values())) or 1.0
+        self.centroids[label] = {k: v / norm for k, v in merged.items() if v > 0.0}
+        return self
+
     def predict_one(self, signature: dict[str, Any], *, text_hint: str = "") -> dict[str, Any]:
         if not self.centroids:
             return _heuristic_route(text_hint, escalation_threshold=self.escalation_confidence)
@@ -408,6 +471,8 @@ def validate_and_repair_triage_record(
     *,
     source_text: str,
     allowed_labels: list[str] | None = None,
+    required_fields: list[str] | None = None,
+    custom_enums: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     """Deterministically validates and repairs structured triage fields against schema & source constraints."""
     labels = allowed_labels or DEFAULT_TRIAGE_LABELS
@@ -446,7 +511,7 @@ def validate_and_repair_triage_record(
     if summary:
         checks_passed += 1
 
-    # 4) Deterministic entity grounding vs source text
+    # 4) Deterministic entity grounding vs source text + character span provenance
     source_entities = _extract_entities(source_text)
     entities = repaired.get("entities")
     if not isinstance(entities, dict):
@@ -456,7 +521,23 @@ def validate_and_repair_triage_record(
             existing = entities.get(k, [])
             if not isinstance(existing, list) or not existing:
                 entities[k] = vals
+    if "entity_spans" not in repaired:
+        repaired["entity_spans"] = extract_entities_with_spans(source_text)
     checks_passed += 1
+
+    if required_fields:
+        for req_key in required_fields:
+            total_checks += 1
+            if req_key not in repaired or repaired[req_key] in (None, ""):
+                repaired[req_key] = "unspecified"
+            checks_passed += 1
+
+    if custom_enums:
+        for enum_key, allowed_vals in custom_enums.items():
+            total_checks += 1
+            if allowed_vals and repaired.get(enum_key) not in allowed_vals:
+                repaired[enum_key] = allowed_vals[0]
+            checks_passed += 1
 
     repaired["schema_valid"] = checks_passed == total_checks
     repaired["schema_score"] = round(checks_passed / total_checks, 4)
