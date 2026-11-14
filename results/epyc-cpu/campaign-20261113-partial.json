@@ -1,0 +1,71 @@
+{
+  "benchmark_notes": [
+    "Measurements ran on a shared host; these are not maximum sustainable throughput.",
+    "JSON result objects extracted from CLI stdout containing non-JSON model banners.",
+    "Triage checked HTTP status and JSON object shape, not classification correctness or PII redaction.",
+    "Offline environment variables set; zero egress not independently verified.",
+    "Triage server uses a model lock; concurrent request handling does not imply parallel model inference."
+  ],
+  "cpu": "AMD EPYC 7452 32-Core Processor",
+  "cpu_affinity": "24-27",
+  "int8_early_exit": {
+    "early_exit_per_doc_ms": 1413.93,
+    "early_exit_total_s": 45.2457,
+    "full_decode_per_doc_ms": 4459.11,
+    "full_decode_total_s": 142.6916,
+    "max_level": 2,
+    "n": 32,
+    "passes_early_exit": 3,
+    "passes_full": 9,
+    "speedup": 3.15
+  },
+  "measurement_date_local": "2026-11-13",
+  "numa_memory_node": 0,
+  "source_commit": "cb6f3b0882cc27a7cc6b8cfa6ee2bcdfdadaf6d6",
+  "status": "partial; not a full campaign",
+  "threads": 4,
+  "triage_concurrent": {
+    "attempted": 4,
+    "http_200_json_object": 4,
+    "requested": 4,
+    "wall_s": 30.254,
+    "workers": 4
+  },
+  "triage_sequential": {
+    "attempted": 24,
+    "http_200_json_object": 24,
+    "requested": 40,
+    "stopped": "180 second budget",
+    "wall_s": 185.114
+  },
+  "uncompleted": [
+    "Full 40 sequential requests",
+    "Requested V100 batch and dataset sweeps",
+    "Requested full-size CUDA RL and distillation",
+    "Continuous thermal-throttling verification"
+  ],
+  "xsum_fp32": {
+    "batch_size": 4,
+    "dtype": "fp32",
+    "items_per_min": 10.8,
+    "large_n": 32,
+    "large_s": 183.857,
+    "marginal_s_per_doc": 5.559,
+    "model_load_s": 5.972,
+    "quantize": "none",
+    "small_n": 4,
+    "small_s": 28.208
+  },
+  "xsum_int8": {
+    "batch_size": 4,
+    "dtype": "fp32",
+    "items_per_min": 18.4,
+    "large_n": 32,
+    "large_s": 112.09,
+    "marginal_s_per_doc": 3.252,
+    "model_load_s": 8.017,
+    "quantize": "int8",
+    "small_n": 4,
+    "small_s": 21.026
+  }
+}
