@@ -1,6 +1,7 @@
 """Hardware acceleration primitives: INT4 groupwise packing, ONNX manifests, compile wrappers & fused VQ lookup."""
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import time
@@ -92,7 +93,7 @@ def export_ncm_onnx_manifest(
     exported_onnx = False
     if input_dim is not None:
         try:
-            import onnx  # noqa: F401
+            importlib.import_module("onnx")
 
             dummy = torch.randn(1, seq_len, input_dim)
             onnx_file = target.with_suffix(".onnx")
