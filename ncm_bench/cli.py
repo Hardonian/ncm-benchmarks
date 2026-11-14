@@ -814,6 +814,63 @@ def cmd_report(args):
     _emit_output(out_str, args)
 
 
+def cmd_bundle_offline(args):
+    import shutil
+    import tarfile
+    import tempfile
+    import zipapp
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    bundle_tar = out_dir / "ncm-offline-bundle.tar.gz"
+    files_added: list[str] = []
+    with tarfile.open(bundle_tar, "w:gz") as tf:
+        for rel in ("SHA256SUMS", "pyproject.toml", "README.md"):
+            cand = ROOT_DIR / rel
+            if cand.exists():
+                tf.add(cand, arcname=rel)
+                files_added.append(rel)
+
+    pyz_path = out_dir / "ncm-bench.pyz"
+    with tempfile.TemporaryDirectory() as tmp_d:
+        stage_pkg = Path(tmp_d) / "ncm_bench"
+        shutil.copytree(ROOT_DIR / "ncm_bench", stage_pkg, ignore=shutil.ignore_patterns("__pycache__"))
+        zipapp.create_archive(tmp_d, pyz_path, main="ncm_bench.cli:main", interpreter="/usr/bin/env python3")
+
+    print(
+        json.dumps(
+            {
+                "tar_bundle": str(bundle_tar),
+                "standalone_pyz": str(pyz_path),
+                "files_bundled": files_added,
+            },
+            indent=2,
+        )
+    )
+
+
+def cmd_hardware_probe(args):
+    from ncm_bench.accel import probe_accelerator_capabilities
+
+    res = probe_accelerator_capabilities()
+    _emit_output(json.dumps(res, indent=2), args)
+
+
+def cmd_validate_receipt(args):
+    from ncm_bench.compliance import verify_evidence_bundle
+    from ncm_bench.frontier import validate_receipt_submission
+
+    in_path = Path(args.input)
+    payload = json.loads(in_path.read_text(encoding="utf-8"))
+    if "merkle_root_sha256" in payload:
+        res = verify_evidence_bundle(in_path, hmac_secret=getattr(args, "hmac_secret", None))
+    else:
+        res = validate_receipt_submission(payload)
+    print(json.dumps(res, indent=2))
+    if not res.get("valid", False):
+        sys.exit(1)
+
+
 def cmd_verify(args):
     from scripts.fetch_artifacts import load_checksums, sha256_file
 
@@ -1001,6 +1058,22 @@ def main():
     p_rep.add_argument("--output-file", "-o", default=None, help="Optional output file path")
     p_rep.add_argument("--html", action="store_true", help="Emit standalone HTML report instead of JSON")
     p_rep.set_defaults(func=cmd_report)
+
+    # bundle-offline
+    p_bnd = sub.add_parser("bundle-offline", help="Create air-gapped tar.gz bundle and standalone .pyz CLI")
+    p_bnd.add_argument("--out-dir", "-o", default="dist/offline")
+    p_bnd.set_defaults(func=cmd_bundle_offline)
+
+    # hardware-probe
+    p_hw = sub.add_parser("hardware-probe", help="Probe accelerators (CPU/CUDA/MPS/ROCm) and VQ latency")
+    p_hw.add_argument("--output-file", "-o", default=None)
+    p_hw.set_defaults(func=cmd_hardware_probe)
+
+    # validate-receipt
+    p_val = sub.add_parser("validate-receipt", help="Validate benchmark receipt JSON or signed evidence bundle")
+    p_val.add_argument("--input", "-i", required=True)
+    p_val.add_argument("--hmac-secret", default=None)
+    p_val.set_defaults(func=cmd_validate_receipt)
 
     # verify
     p_ver = sub.add_parser("verify", help="Verify model and data SHA256 checksums")

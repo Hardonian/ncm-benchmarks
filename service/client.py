@@ -279,3 +279,24 @@ class NCMClient:
             res["doc_index"] = idx
             results.append(res)
         return results
+
+
+from service.transport import (  # noqa: E402
+    AsyncNCMClient,
+    DynamicBatchCoalescer,
+    HybridCircuitBreakerClient,
+    decode_binary_frame,
+    encode_binary_frame,
+)
+
+__all__ = [
+    "AsyncNCMClient",
+    "DynamicBatchCoalescer",
+    "HybridCircuitBreakerClient",
+    "NCMAuthError",
+    "NCMClient",
+    "NCMClientError",
+    "NCMServerBusyError",
+    "decode_binary_frame",
+    "encode_binary_frame",
+]

@@ -1,0 +1,14 @@
+{
+  "name": "ncm-benchmarks",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "postCreateCommand": "pip install -e .[dev]",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "charliermarsh.ruff"]
+    }
+  },
+  "remoteEnv": {
+    "HF_HUB_OFFLINE": "1",
+    "HF_HUB_DISABLE_XET": "1"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "title": "NCM Sovereign Microservice Observability",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["ncm", "sovereign-ai"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total Sovereign Requests",
+      "targets": [{ "expr": "ncm_requests_total", "refId": "A" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Total Inference Errors",
+      "targets": [{ "expr": "ncm_errors_total", "refId": "A" }]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Latency p95 (seconds)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ncm_request_latency_seconds_bucket[5m])) by (le))",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
-from typing import Literal
+from typing import Any, Literal
 
 import torch
 from rouge_score import rouge_scorer
@@ -137,5 +137,51 @@ def generate_mbr_summary(
         "selected_index": best_idx,
         "num_candidates": num_candidates,
         "candidates": candidates,
+        "scores": [round(s, 4) for s in scores],
+    }
+
+
+def select_diverse_mbr_centroid(
+    candidates: list[str],
+    *,
+    cluster_hashes: list[str] | None = None,
+    similarity_threshold: float = 0.75,
+    utility: Literal["rougeL", "jaccard", "cosine"] = "rougeL",
+) -> dict[str, Any]:
+    """Deduplicates near-identical concept clusters before running Minimum Bayes Risk consensus selection."""
+    if not candidates:
+        raise ValueError("Candidate pool is empty")
+
+    kept_idx: list[int] = []
+    seen_hashes: set[str] = set()
+    kept_tokens: list[set[str]] = []
+
+    for i, text in enumerate(candidates):
+        chash = cluster_hashes[i] if (cluster_hashes and i < len(cluster_hashes)) else None
+        if chash and chash in seen_hashes:
+            continue
+        toks = set(text.lower().split())
+        is_near_dup = False
+        for prev_toks in kept_tokens:
+            union = toks | prev_toks
+            jacc = (len(toks & prev_toks) / len(union)) if union else 1.0
+            if jacc >= similarity_threshold:
+                is_near_dup = True
+                break
+        if is_near_dup:
+            continue
+        if chash:
+            seen_hashes.add(chash)
+        kept_tokens.append(toks)
+        kept_idx.append(i)
+
+    diverse_pool = [candidates[i] for i in kept_idx] or [candidates[0]]
+    orig_map = kept_idx or [0]
+    best_cand, local_idx, scores = select_mbr_centroid(diverse_pool, utility=utility)
+    return {
+        "best_candidate": best_cand,
+        "best_index": orig_map[local_idx],
+        "diverse_pool_size": len(diverse_pool),
+        "original_pool_size": len(candidates),
         "scores": [round(s, 4) for s in scores],
     }

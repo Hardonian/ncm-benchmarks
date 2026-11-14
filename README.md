@@ -4,7 +4,7 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/ncm-benchmarks.svg)](https://pypi.org/project/ncm-benchmarks/)
 [![CI Status](https://github.com/Hardonian/ncm-benchmarks/actions/workflows/ci.yml/badge.svg)](https://github.com/Hardonian/ncm-benchmarks/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v2.1.0-green.svg)](https://github.com/Hardonian/ncm-benchmarks/releases)
+[![Release](https://img.shields.io/badge/release-v2.2.0-green.svg)](https://github.com/Hardonian/ncm-benchmarks/releases)
 [![Zero Pickle](https://img.shields.io/badge/security-zero--pickle%20safetensors-purple.svg)](https://github.com/Hardonian/ncm-benchmarks)
 
 > **"Next-Concept Modeling proves that the industry's default reliance on 70B cloud autoregressive LLMs for basic document classification and triage is an inefficient legacy pattern.**
@@ -193,7 +193,7 @@ python scripts/batch_triage.py --input raw_docs.jsonl --output triaged.jsonl --e
 ## 📑 Strategic Whitepaper & Research References
 
 - **[Enterprise Whitepaper](docs/ENTERPRISE-WHITEPAPER.md)**: Deep dive into sovereign unit economics, data compliance frameworks, and cold-storage triage architecture.
-- **[100-Item Frontier Roadmap](docs/ROADMAP-100.md)**: Full 10-pillar engineering roadmap tracking delivered `v2.0.0` / `v2.1.0` capabilities and upcoming frontier milestones.
+- **[100-Item Frontier Roadmap](docs/ROADMAP-100.md)**: Full 10-pillar engineering roadmap (`100 / 100` items completed across `v2.0.0`, `v2.1.0`, and `v2.2.0`).
 - **[Launch & Press Kit](docs/PRESS-KIT.md)**: Verified publication hooks, technical executive briefs, and media statements.
 - **[Hermes EPYC Runbook](docs/HERMES-EPYC-PROMPT.md)**: Automation runbook for high-throughput GPU/CPU stress testing and multi-dataset evaluation.
 

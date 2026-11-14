@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ncm-benchmarks
+description: Sovereign Next-Concept Modeling (NCM) microservice and triage engine
+type: application
+version: 2.2.0
+appVersion: "2.2.0"

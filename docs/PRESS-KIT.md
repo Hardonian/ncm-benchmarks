@@ -1,4 +1,4 @@
-# Launch & Press Kit (`ncm-benchmarks` v2.1.0)
+# Launch & Press Kit (`ncm-benchmarks` v2.2.0)
 
 Verified benchmark hooks, executive talking points, and publication templates anchored strictly to recorded hardware receipts in [`results/`](../results/).
 
@@ -10,7 +10,7 @@ Verified benchmark hooks, executive talking points, and publication templates an
 
 Can an open, sovereign 149M-parameter Next-Concept Model match H100 summarization quality, solve 90.7% of Sudoku-Hard puzzles, and classify documents 3.38x faster via Level 0..2 early-exit on CPU — with zero cloud egress?
 
-Meet `ncm-benchmarks` v2.1.0: [GitHub](https://github.com/Hardonian/ncm-benchmarks)
+Meet `ncm-benchmarks` v2.2.0: [GitHub](https://github.com/Hardonian/ncm-benchmarks)
 
 **Post 2/4**
 
@@ -24,11 +24,11 @@ Measured receipts on a single 2018 Tesla V100-SXM2 & Ryzen AI 9 HX 370 CPU:
 
 **Post 3/4**
 
-New in `v2.1.0` for sovereign enterprise AI teams:
+New in `v2.2.0` (100/100 Roadmap Shipped) for sovereign enterprise AI teams:
 
-- Multi-format zero-egress ingestion (`.pdf`, `.html`, `.csv`, `.eml`) + `API_KEY` / `IBAN` PII scrubbing
-- Keyed `HMAC-SHA256` cryptographic audit receipts & `ncm-bench report` JSON/HTML compliance exports
-- `POST /triage/feedback` online active learning (`ConceptClassifier.partial_fit`), `CVE` / `IP` extraction with `entity_spans` provenance, and Concept-Space DPO (`train_stage2_dpo`)
+- Multi-format zero-egress ingestion (`.pdf`, `.docx`, `.xlsx`, `.html`, `.csv`, `.eml` + OCR fallback) & `API_KEY` / `IBAN` PII scrubbing
+- Detached asymmetric receipt signatures, hash-chained `AuditSinkSQLite`, encrypted field envelopes, Merkle evidence bundles & `ncm-bench report` / `bundle-offline` / `validate-receipt`
+- Conformal multi-label calibration, `ConceptLoRALinear` adapters, `INT4` groupwise weight packing, `AsyncNCMClient` + circuit-breaker failover, Helm/DevContainer/Nix & frontier harnesses (`ncm_bench/frontier.py`)
 
 **Post 4/4**
 

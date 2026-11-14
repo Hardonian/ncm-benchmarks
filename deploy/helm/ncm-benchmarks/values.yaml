@@ -1,0 +1,25 @@
+replicaCount: 2
+image:
+  repository: ghcr.io/hardonian/ncm-benchmarks
+  tag: "2.2.0"
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8031
+args:
+  - "--host"
+  - "0.0.0.0"
+  - "--port"
+  - "8031"
+  - "--quantize"
+  - "int8"
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+probes:
+  readinessPath: /ready
+  livenessPath: /health
+env:
+  HF_HUB_OFFLINE: "1"

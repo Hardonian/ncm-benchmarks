@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim-bookworm
+ARG TARGETPLATFORM=linux/amd64
+FROM --platform=$TARGETPLATFORM python:3.12-slim-bookworm
 
 # Runtime dependencies + non-root user
 RUN apt-get update && apt-get install -y --no-install-recommends \

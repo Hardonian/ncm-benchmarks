@@ -1,4 +1,5 @@
 """Enterprise document utilities: offline file/PDF ingestion, long-doc map-reduce, PII redaction, and audit receipts."""
+
 from __future__ import annotations
 
 import csv
@@ -9,6 +10,7 @@ import html
 import io
 import os
 import re
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,8 +29,8 @@ _PII_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 ]
 
 
-def extract_text_from_file(path: Path | str) -> str:
-    """Extracts UTF-8 plain text from .txt, .md, .json/.jsonl, .html, .csv, .eml, or .pdf files locally."""
+def extract_text_from_file(path: Path | str, *, ocr_fallback=None) -> str:
+    """Extracts UTF-8 plain text from .txt, .md, .json/.jsonl, .html, .csv, .eml, .docx, .xlsx, or .pdf files locally."""
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Input file not found: {p}")
@@ -38,7 +40,32 @@ def extract_text_from_file(path: Path | str) -> str:
 
         reader = PdfReader(str(p))
         pages = [page.extract_text() or "" for page in reader.pages]
-        return "\n\n".join(pages).strip()
+        joined = "\n\n".join(pages).strip()
+        if not joined and ocr_fallback is not None:
+            return str(ocr_fallback(p)).strip()
+        return joined
+
+    if suffix == ".docx":
+        with zipfile.ZipFile(p, "r") as zf:
+            xml_raw = zf.read("word/document.xml").decode("utf-8", errors="replace")
+        runs = re.findall(r"<w:t[^>]*>(.*?)</w:t>", xml_raw, flags=re.DOTALL)
+        if runs:
+            return " ".join(html.unescape(r) for r in runs if r.strip()).strip()
+        return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", xml_raw)).split()).strip()
+
+    if suffix == ".xlsx":
+        extracted_cells: list[str] = []
+        with zipfile.ZipFile(p, "r") as zf:
+            names = sorted(zf.namelist())
+            for member in names:
+                if member == "xl/sharedStrings.xml" or member.startswith("xl/worksheets/sheet"):
+                    xml_raw = zf.read(member).decode("utf-8", errors="replace")
+                    if member == "xl/sharedStrings.xml":
+                        vals = re.findall(r"<t[^>]*>(.*?)</t>", xml_raw, flags=re.DOTALL)
+                    else:
+                        vals = re.findall(r"<v>(.*?)</v>", xml_raw, flags=re.DOTALL)
+                    extracted_cells.extend(html.unescape(v).strip() for v in vals if v.strip())
+        return " ".join(extracted_cells).strip()
 
     raw = p.read_text(encoding="utf-8", errors="replace")
     if suffix in {".html", ".htm"}:
@@ -47,8 +74,7 @@ def extract_text_from_file(path: Path | str) -> str:
         return " ".join(html.unescape(stripped).split()).strip()
     if suffix == ".csv":
         rows = [
-            ", ".join(cell.strip() for cell in row if cell.strip())
-            for row in csv.reader(io.StringIO(raw))
+            ", ".join(cell.strip() for cell in row if cell.strip()) for row in csv.reader(io.StringIO(raw))
         ]
         return "\n".join(r for r in rows if r).strip()
     if suffix == ".eml":
@@ -59,9 +85,10 @@ def extract_text_from_file(path: Path | str) -> str:
             parts.append(f"Subject: {subject}")
         if msg.is_multipart():
             for part in msg.walk():
-                if part.get_content_type() == "text/plain" and "attachment" not in str(
-                    part.get("Content-Disposition", "")
-                ).lower():
+                if (
+                    part.get_content_type() == "text/plain"
+                    and "attachment" not in str(part.get("Content-Disposition", "")).lower()
+                ):
                     payload = part.get_payload(decode=True)
                     text_part = (
                         payload.decode(part.get_content_charset() or "utf-8", errors="replace")
@@ -90,6 +117,7 @@ def redact_pii(text: str) -> tuple[str, dict[str, str]]:
     scrubbed = text
 
     for label, pattern in _PII_PATTERNS:
+
         def _repl(match: re.Match[str], _lbl: str = label) -> str:
             idx = counters.get(_lbl, 0) + 1
             counters[_lbl] = idx
@@ -165,8 +193,7 @@ def summarize_long_document(
 
     if use_mbr:
         chunk_summaries = [
-            generate_mbr_summary(bundle, c, num_candidates=num_candidates)["summary"]
-            for c in chunks
+            generate_mbr_summary(bundle, c, num_candidates=num_candidates)["summary"] for c in chunks
         ]
     else:
         chunk_summaries = summarize_texts(bundle, chunks)
@@ -228,4 +255,3 @@ def verify_audit_receipt(receipt: dict[str, Any], hmac_secret: str) -> bool:
     )
     expected = hmac.new(hmac_secret.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
     return hmac.compare_digest(str(receipt.get("hmac_sha256", "")), expected)
-

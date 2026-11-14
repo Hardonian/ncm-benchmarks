@@ -264,7 +264,7 @@ def create_app(
     app = fastapi.FastAPI(
         title="Next-Concept Modeling Sovereign Service",
         description="Local-first coarse-to-fine concept generation, MBR, and Sudoku microservice",
-        version="2.1.0",
+        version="2.2.0",
         lifespan=lifespan,
     )
 
@@ -343,6 +343,8 @@ def create_app(
     @app.middleware("http")
     async def security_and_logging_middleware(request: Request, call_next):
         req_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+        traceparent = request.headers.get("traceparent") or f"00-{uuid.uuid4().hex}-{uuid.uuid4().hex[:16]}-01"
+        trace_id = traceparent.split("-")[1] if len(traceparent.split("-")) >= 2 else req_id
         t0 = time.perf_counter()
         _inc_metric("requests_total")
 
@@ -381,6 +383,8 @@ def create_app(
             _inc_metric("errors_total")
 
         response.headers["X-Request-ID"] = req_id
+        response.headers["traceparent"] = traceparent
+        response.headers["X-Trace-ID"] = trace_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"

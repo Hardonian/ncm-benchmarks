@@ -381,6 +381,7 @@ class ConceptClassifier:
     def __init__(self, escalation_confidence: float = 0.45) -> None:
         self.escalation_confidence = escalation_confidence
         self.centroids: dict[str, dict[int, float]] = {}
+        self.conformal_q: float = 0.85
 
     def fit(self, signatures: list[dict[str, Any]], labels: list[str]) -> "ConceptClassifier":
         if len(signatures) != len(labels):
@@ -438,6 +439,56 @@ class ConceptClassifier:
             "scores": {lbl: round(sc, 4) for lbl, sc in ranked},
             "concept_hash": signature.get("concept_hash", ""),
             "early_exit_passes": signature.get("passes_executed", 0),
+        }
+
+    def _unit_hist(self, hist: dict[int, float]) -> dict[int, float]:
+        norm = math.sqrt(sum(v * v for v in hist.values()))
+        return {k: v / norm for k, v in hist.items()} if norm > 0.0 else hist
+
+    def calibrate_conformal(
+        self,
+        signatures: list[dict[str, Any]],
+        true_labels: list[str],
+        *,
+        alpha: float = 0.10,
+    ) -> float:
+        """Calibrates finite-sample split conformal quantile over centroid nonconformity scores."""
+        if not signatures or len(signatures) != len(true_labels):
+            raise ValueError("signatures and true_labels must be non-empty and match in length")
+        scores: list[float] = []
+        for sig, lbl in zip(signatures, true_labels, strict=True):
+            centroid = self.centroids.get(lbl, {})
+            sim = min(1.0, max(0.0, _sparse_cosine(self._unit_hist(sig["histogram"]), centroid))) if centroid else 0.0
+            scores.append(1.0 - sim)
+        scores.sort()
+        n = len(scores)
+        q_idx = min(n - 1, max(0, math.ceil((n + 1) * (1.0 - alpha)) - 1))
+        self.conformal_q = round(scores[q_idx], 4)
+        return self.conformal_q
+
+    def predict_conformal_set(
+        self,
+        signature: dict[str, Any],
+        *,
+        alpha: float = 0.10,
+        q_hat: float | None = None,
+    ) -> dict[str, Any]:
+        """Produces a multi-label prediction set with finite-sample conformal coverage guarantee."""
+        threshold = float(q_hat if q_hat is not None else getattr(self, "conformal_q", 0.85))
+        if not self.centroids:
+            return {"prediction_set": [], "top_label": "uncategorized", "q_hat": threshold, "alpha": alpha, "multi_label": False}
+        unit = self._unit_hist(signature["histogram"])
+        scores = {lbl: min(1.0, max(0.0, _sparse_cosine(unit, c))) for lbl, c in self.centroids.items()}
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        pset = [lbl for lbl, sim in ranked if (1.0 - sim) <= threshold]
+        if not pset:
+            pset = [ranked[0][0]]
+        return {
+            "prediction_set": pset,
+            "top_label": ranked[0][0],
+            "q_hat": round(threshold, 4),
+            "alpha": alpha,
+            "multi_label": len(pset) > 1,
         }
 
 
