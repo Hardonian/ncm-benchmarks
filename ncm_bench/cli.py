@@ -871,6 +871,17 @@ def cmd_validate_receipt(args):
         sys.exit(1)
 
 
+def cmd_compare(args):
+    from ncm_bench.compare import run_full_comparison_suite
+
+    res = run_full_comparison_suite(
+        n_sudoku=int(args.n_sudoku),
+        n_xsum=int(args.n_xsum),
+        fast=bool(args.fast),
+    )
+    _emit_output(json.dumps(res, indent=2), args)
+
+
 def cmd_verify(args):
     from scripts.fetch_artifacts import load_checksums, sha256_file
 
@@ -1074,6 +1085,17 @@ def main():
     p_val.add_argument("--input", "-i", required=True)
     p_val.add_argument("--hmac-secret", default=None)
     p_val.set_defaults(func=cmd_validate_receipt)
+
+    # compare
+    p_cmp = sub.add_parser(
+        "compare",
+        help="Run head-to-head NCM vs Autoregressive LM, Symbolic & Extractive benchmarks",
+    )
+    p_cmp.add_argument("--n-sudoku", type=int, default=50, help="Number of Sudoku-Hard boards to evaluate")
+    p_cmp.add_argument("--n-xsum", type=int, default=24, help="Number of XSum articles to evaluate")
+    p_cmp.add_argument("--fast", action="store_true", help="Run fast smoke configuration without 149M weights")
+    p_cmp.add_argument("--output-file", "-o", default=None, help="Optional JSON output file path")
+    p_cmp.set_defaults(func=cmd_compare)
 
     # verify
     p_ver = sub.add_parser("verify", help="Verify model and data SHA256 checksums")

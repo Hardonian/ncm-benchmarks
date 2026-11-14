@@ -406,6 +406,59 @@
         </div>
         <div class="passage-box mt-sm hidden" id="sandbox-output"></div>
       </div>
+
+      <div class="card">
+        <div class="card-title">Head-to-Head Arena: NCM vs Autoregressive LM, Symbolic &amp; Extractive Baselines (CPU)</div>
+        <p class="subtitle">Reproducible zero-leakage comparison on Ryzen AI 9 HX 370 (<code>ncm-bench compare</code> &rarr; <code>results/hx370-cpu/ncm_vs_baselines.json</code>).</p>
+        <table class="bench-table">
+          <thead>
+            <tr>
+              <th>Arena / Dataset</th>
+              <th>Competing Baselines</th>
+              <th>NCM Sovereign Result</th>
+              <th>Key Finding</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>O(L) vs O(T) Scaling (16&ndash;128 tok)</td>
+              <td>CausalTokenLM: 4.75 &rarr; 47.52 ms (16&ndash;128 passes)</td>
+              <td class="bench-highlight">3.59 &rarr; 3.88 ms (4 constant passes)</td>
+              <td class="bench-highlight">12.24x CPU speedup at 128 tok</td>
+            </tr>
+            <tr>
+              <td>Sudoku-Hard 9&times;9 (data/sudoku/hard, n=50)</td>
+              <td>81-Step AR: 0.0% | Naked Singles: 28.0% | 64-Node Backtrack: 64.0%</td>
+              <td class="bench-highlight">86.0% solved / 88.0% valid (9 passes, Bo4+Repair)</td>
+              <td class="bench-highlight">+22.0 pp over backtracking (97.68% cell)</td>
+            </tr>
+            <tr>
+              <td>BBC XSum News (data/xsum, n=24, P=512 clip)</td>
+              <td>Lead-1: 11.83 R-L | TF-IDF Centroid: 12.97 R-L</td>
+              <td class="bench-highlight">28.74 ROUGE-L (36.52 R-1 / 12.02 R-2, 9 passes)</td>
+              <td class="bench-highlight">+15.77 R-L over TF-IDF Centroid</td>
+            </tr>
+            <tr>
+              <td>Mastermind 4-Peg (n=48 eval)</td>
+              <td>Random: 2.08% | CausalTokenLM: 6.25% consistent (2.08% exact)</td>
+              <td class="bench-highlight">16.67% consistent / 6.25% exact (4 passes, Bo8)</td>
+              <td class="bench-highlight">2.67x higher consistency in 4 passes</td>
+            </tr>
+            <tr>
+              <td>Cold Mini-Sudoku 4&times;4 &amp; Dyck-2 (512 train, 450 steps)</td>
+              <td>CausalTokenLM: 70.83% 4&times;4 solved | 68.75% valid Dyck-2</td>
+              <td>NCM: 25.00% 4&times;4 solved | 25.00% valid Dyck-2 (Bo8)</td>
+              <td>Honest limit: tiny cold runs favor direct AR</td>
+            </tr>
+            <tr>
+              <td>Paraphrased Triage &amp; Sovereign Compliance</td>
+              <td>Keyword Top-1: 91.67% | Cloud PII Guard: 0.0%</td>
+              <td class="bench-highlight">83.33% Conformal Cov | 100% PII/Restore/Ed25519</td>
+              <td class="bench-highlight">Catches $10 FinQA error &amp; proves egress audit</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
   </div>
 

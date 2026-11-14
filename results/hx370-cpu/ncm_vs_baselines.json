@@ -1,0 +1,312 @@
+{
+  "schema": "ncm-vs-baselines-v1",
+  "timestamp_utc": "2026-11-14T18:28:06.021714+00:00",
+  "hardware": {
+    "platform": "Windows-11-10.0.29708-SP0",
+    "processor": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD",
+    "torch_version": "2.15.0+cpu",
+    "cuda_available": false
+  },
+  "fast_mode": false,
+  "total_wall_s": 233.84,
+  "step_scaling": {
+    "architecture_comparison": "Stage2NCM (4-level block-diagonal) vs CausalTokenLM (64-dim, 2L, 4H)",
+    "rows": [
+      {
+        "target_tokens": 16,
+        "ncm_passes": 4,
+        "ar_passes": 16,
+        "ncm_ms_per_sample": 3.59,
+        "ar_ms_per_sample": 4.75,
+        "pass_reduction_x": 4.0,
+        "latency_speedup_x": 1.33
+      },
+      {
+        "target_tokens": 32,
+        "ncm_passes": 4,
+        "ar_passes": 32,
+        "ncm_ms_per_sample": 3.07,
+        "ar_ms_per_sample": 8.21,
+        "pass_reduction_x": 8.0,
+        "latency_speedup_x": 2.67
+      },
+      {
+        "target_tokens": 64,
+        "ncm_passes": 4,
+        "ar_passes": 64,
+        "ncm_ms_per_sample": 3.88,
+        "ar_ms_per_sample": 15.42,
+        "pass_reduction_x": 16.0,
+        "latency_speedup_x": 3.98
+      },
+      {
+        "target_tokens": 128,
+        "ncm_passes": 4,
+        "ar_passes": 128,
+        "ncm_ms_per_sample": 3.88,
+        "ar_ms_per_sample": 47.52,
+        "pass_reduction_x": 32.0,
+        "latency_speedup_x": 12.24
+      }
+    ]
+  },
+  "games_arena": {
+    "sudoku_9x9_hard": {
+      "n_boards": 50,
+      "dataset": "data/sudoku/hard",
+      "methods": {
+        "naked_singles_only": {
+          "n_boards": 50,
+          "solved_pct": 28.0,
+          "cell_pct": 61.19,
+          "valid_pct": 28.0,
+          "format_valid_pct": 100.0,
+          "solved_count": 14,
+          "ci_95": {
+            "p": 28.0,
+            "lower": 17.47,
+            "upper": 41.67,
+            "margin_pp": 12.1
+          },
+          "wall_s": 0.038,
+          "sequential_neural_passes": 0
+        },
+        "cold_backtrack_64_nodes": {
+          "n_boards": 50,
+          "solved_pct": 64.0,
+          "cell_pct": 78.91,
+          "valid_pct": 64.0,
+          "format_valid_pct": 100.0,
+          "solved_count": 32,
+          "ci_95": {
+            "p": 64.0,
+            "lower": 50.14,
+            "upper": 75.86,
+            "margin_pp": 12.86
+          },
+          "wall_s": 0.273,
+          "sequential_neural_passes": 0
+        },
+        "autoregressive_81step_row_greedy": {
+          "n_boards": 50,
+          "solved_pct": 0.0,
+          "cell_pct": 59.8,
+          "valid_pct": 0.0,
+          "format_valid_pct": 100.0,
+          "solved_count": 0,
+          "ci_95": {
+            "p": 0.0,
+            "lower": 0.0,
+            "upper": 7.13,
+            "margin_pp": 3.57
+          },
+          "wall_s": 0.011,
+          "sequential_neural_passes": 81
+        },
+        "ncm_149m_greedy_no_repair": {
+          "n_boards": 50,
+          "solved_pct": 80.0,
+          "cell_pct": 97.31,
+          "valid_pct": 80.0,
+          "format_valid_pct": 100.0,
+          "solved_count": 40,
+          "ci_95": {
+            "p": 80.0,
+            "lower": 66.96,
+            "upper": 88.76,
+            "margin_pp": 10.9
+          },
+          "wall_s": 11.28,
+          "sequential_neural_passes": 9
+        },
+        "ncm_149m_greedy_repair": {
+          "n_boards": 50,
+          "solved_pct": 84.0,
+          "cell_pct": 97.41,
+          "valid_pct": 84.0,
+          "format_valid_pct": 100.0,
+          "solved_count": 42,
+          "ci_95": {
+            "p": 84.0,
+            "lower": 71.49,
+            "upper": 91.66,
+            "margin_pp": 10.09
+          },
+          "wall_s": 11.219,
+          "sequential_neural_passes": 9
+        },
+        "ncm_149m_best_of_4_repair": {
+          "n_boards": 50,
+          "solved_pct": 86.0,
+          "cell_pct": 97.68,
+          "valid_pct": 88.0,
+          "format_valid_pct": 100.0,
+          "solved_count": 43,
+          "ci_95": {
+            "p": 86.0,
+            "lower": 73.81,
+            "upper": 93.05,
+            "margin_pp": 9.62
+          },
+          "wall_s": 18.173,
+          "sequential_neural_passes": 9
+        }
+      }
+    },
+    "mini_sudoku_4x4": {
+      "n_train": 512,
+      "n_eval": 48,
+      "masked_cells": 10,
+      "train_steps": 450,
+      "methods": {
+        "naked_singles_heuristic": {
+          "solved_pct": 31.25,
+          "cell_acc_pct": 78.26,
+          "ci_95": {
+            "p": 31.25,
+            "lower": 19.95,
+            "upper": 45.33,
+            "margin_pp": 12.69
+          },
+          "sequential_passes": 0
+        },
+        "causal_token_lm_16steps": {
+          "solved_pct": 70.83,
+          "cell_acc_pct": 87.24,
+          "ci_95": {
+            "p": 70.83,
+            "lower": 56.82,
+            "upper": 81.76,
+            "margin_pp": 12.47
+          },
+          "sequential_passes": 16,
+          "ms_per_board": 0.79
+        },
+        "ncm_concept_4levels_raw": {
+          "solved_pct": 6.25,
+          "cell_acc_pct": 56.25,
+          "ci_95": {
+            "p": 6.25,
+            "lower": 2.15,
+            "upper": 16.84,
+            "margin_pp": 7.34
+          },
+          "sequential_passes": 4,
+          "ms_per_board": 0.62
+        },
+        "ncm_concept_4levels_plus_repair": {
+          "solved_pct": 25.0,
+          "cell_acc_pct": 75.52,
+          "ci_95": {
+            "p": 25.0,
+            "lower": 14.92,
+            "upper": 38.78,
+            "margin_pp": 11.93
+          },
+          "sequential_passes": 4,
+          "ms_per_board": 0.62
+        }
+      }
+    },
+    "mastermind_4peg": {
+      "n_eval": 48,
+      "methods": {
+        "uniform_random": {
+          "clue_consistent_pct": 2.08,
+          "exact_recovery_pct": 0.0,
+          "sequential_passes": 0
+        },
+        "causal_token_lm": {
+          "clue_consistent_pct": 6.25,
+          "exact_recovery_pct": 2.08,
+          "sequential_passes": 4
+        },
+        "ncm_concept_4levels_greedy": {
+          "clue_consistent_pct": 4.17,
+          "exact_recovery_pct": 0.0,
+          "sequential_passes": 4
+        },
+        "ncm_concept_4levels_best_of_8": {
+          "clue_consistent_pct": 16.67,
+          "exact_recovery_pct": 6.25,
+          "sequential_passes": 4
+        }
+      }
+    },
+    "dyck2_bracket_closure": {
+      "n_eval": 48,
+      "methods": {
+        "causal_token_lm_8steps": {
+          "valid_dyck2_pct": 68.75,
+          "exact_match_pct": 8.33,
+          "sequential_passes": 8
+        },
+        "ncm_concept_4levels_greedy": {
+          "valid_dyck2_pct": 4.17,
+          "exact_match_pct": 0.0,
+          "sequential_passes": 4
+        },
+        "ncm_concept_4levels_best_of_8": {
+          "valid_dyck2_pct": 25.0,
+          "exact_match_pct": 2.08,
+          "sequential_passes": 4
+        }
+      }
+    }
+  },
+  "xsum_dataset_arena": {
+    "dataset": "data/xsum",
+    "n_docs": 24,
+    "methods": {
+      "lead_1_extractive": {
+        "rouge1": 14.99,
+        "rouge2": 1.37,
+        "rougeL": 11.83,
+        "n_samples": 24,
+        "wall_s": 0.0011,
+        "neural_passes": 0
+      },
+      "tfidf_centroid_extractive": {
+        "rouge1": 19.12,
+        "rouge2": 3.84,
+        "rougeL": 12.97,
+        "n_samples": 24,
+        "wall_s": 0.0232,
+        "neural_passes": 0
+      },
+      "ncm_149m_int8_safetensors": {
+        "rouge1": 36.52,
+        "rouge2": 12.02,
+        "rougeL": 28.74,
+        "n_samples": 24,
+        "wall_s": 31.725,
+        "neural_passes": 9
+      }
+    },
+    "v100_full_census_reference": {
+      "n_docs": 11334,
+      "rougeL": 27.93,
+      "docs_per_sec": 9.47
+    }
+  },
+  "enterprise_use_cases": {
+    "paraphrased_incident_triage": {
+      "n_eval": 12,
+      "ncm_backend": "149M int8 L0..L2",
+      "keyword_rule_acc_pct": 91.67,
+      "bow_cosine_acc_pct": 58.33,
+      "ncm_conformal_top1_acc_pct": 41.67,
+      "ncm_conformal_coverage_pct": 83.33,
+      "ncm_conformal_avg_set_size": 3.08
+    },
+    "sovereign_compliance_and_finqa": {
+      "unprotected_cloud_llm_pii_protected_pct": 0.0,
+      "destructive_regex_mask_restored_pct": 0.0,
+      "ncm_sovereign_pii_protected_pct": 100.0,
+      "ncm_sovereign_entity_restored_pct": 100.0,
+      "ncm_detached_sig_verified_pct": 100.0,
+      "finqa_computed_sum": 400.0,
+      "finqa_discrepancy_caught": true
+    }
+  }
+}
