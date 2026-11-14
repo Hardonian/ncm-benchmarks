@@ -6,13 +6,13 @@ Verified benchmark hooks, executive talking points, and publication templates an
 
 ## X / Twitter Thread Template
 
-**Post 1/4**
+### Post 1/4
 
 Can an open, sovereign 149M-parameter Next-Concept Model match H100 summarization quality, solve 90.7% of Sudoku-Hard puzzles, and classify documents 3.38x faster via Level 0..2 early-exit on CPU — with zero cloud egress?
 
 Meet `ncm-benchmarks` v2.2.0: [GitHub](https://github.com/Hardonian/ncm-benchmarks)
 
-**Post 2/4**
+### Post 2/4
 
 Measured receipts on a single 2018 Tesla V100-SXM2 & Ryzen AI 9 HX 370 CPU:
 
@@ -22,7 +22,7 @@ Measured receipts on a single 2018 Tesla V100-SXM2 & Ryzen AI 9 HX 370 CPU:
 - **Sudoku Multi-Tier (Best-of-4 + Repair)**: `99.8%` Easy, `98.55%` Medium, `90.7%` Hard on V100 (`97.03 / 77.77 / 48.2 boards/s`)
 - **Coarse Early-Exit (`L0..L2`)**: `3.38x` CPU speedup (`356.02 ms` vs `1205.13 ms/doc`)
 
-**Post 3/4**
+### Post 3/4
 
 New in `v2.2.0` (100/100 Roadmap Shipped) for sovereign enterprise AI teams:
 
@@ -30,7 +30,7 @@ New in `v2.2.0` (100/100 Roadmap Shipped) for sovereign enterprise AI teams:
 - Detached asymmetric receipt signatures, hash-chained `AuditSinkSQLite`, encrypted field envelopes, Merkle evidence bundles & `ncm-bench report` / `bundle-offline` / `validate-receipt`
 - Conformal multi-label calibration, `ConceptLoRALinear` adapters, `INT4` groupwise weight packing, `AsyncNCMClient` + circuit-breaker failover, Helm/DevContainer/Nix & frontier harnesses (`ncm_bench/frontier.py`)
 
-**Post 4/4**
+### Post 4/4
 
 Install in one command and inspect every receipt + interactive TCO calculator:
 
