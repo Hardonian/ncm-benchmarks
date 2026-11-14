@@ -94,7 +94,7 @@ def train_stage2_grpo(
     history: list[dict[str, float]] = []
 
     for step in range(cfg.steps):
-        idx = torch.randint(0, num_prompts, (min(cfg.batch_size, num_prompts),), device=dev)
+        idx = torch.randint(0, num_prompts, (min(cfg.batch_size, num_prompts),), device=prefixes.device)
         prompt_b = prefixes[idx].to(dev).long()
         bs = prompt_b.shape[0]
         g = cfg.group_size
